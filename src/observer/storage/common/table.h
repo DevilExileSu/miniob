@@ -55,6 +55,9 @@ public:
    * @param clog_manager clog管理器
    */
   RC open(const char *meta_file, const char *base_dir, CLogManager *clog_manager);
+  
+  RC can_drop();
+  RC drop();
 
   RC insert_record(Trx *trx, int value_num, const Value *values);
   RC update_record(Trx *trx, const char *attribute_name, const Value *value, int condition_num,

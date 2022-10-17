@@ -16,4 +16,7 @@ compile_commands.json
 GRTAGS
 GPATH
 GTAGS
+miniob/*
+observer.*
+test/case/result_tmp
 #*#

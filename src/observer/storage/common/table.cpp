@@ -120,6 +120,49 @@ RC Table::create(
   return rc;
 }
 
+
+RC Table::drop() {
+
+  sync();
+
+  const char *dir = base_dir_.c_str();
+
+  // 1. 删除描述表元数据的文件
+  // 1.1 获取表元数据文件路径
+ std::string table_file_path = table_meta_file(dir, name());
+  LOG_INFO("table_file_path = %s", table_file_path.c_str());
+  // 1.2 调用remove()删除文件
+  if (unlink(table_file_path.c_str()) != 0) {
+    LOG_ERROR("Failed to remove meta file = %s, errno = %s", table_file_path.c_str(), errno);
+    return RC::GENERIC_ERROR;
+  }
+
+  // 2. 删除数据文件
+  // 2.1 获取数据文件路径
+  std::string table_data_path = table_data_file(dir, name());
+  // 2.2 调用remove()删除文件
+  if (unlink(table_data_path.c_str()) != 0) {
+    LOG_ERROR("Failed to remove data file = %s, errno = %s", table_data_path.c_str(), errno);
+    return RC::GENERIC_ERROR;
+  }
+
+  // 3. 删除索引
+  // 3.1 遍历删除索引
+  for (auto index: indexes_) {
+    ((BplusTreeIndex*)index)->close();
+    // 3.2 获取索引文件路径
+    std::string table_index_path = table_index_file(dir, name(), index->index_meta().name()); 
+    // 3.3 调用remove()删除文件
+    if (unlink(table_index_path.c_str()) != 0) {
+      LOG_ERROR("Failed to remove index file = %s, errno = %s", table_index_path.c_str(), errno);
+      return RC::GENERIC_ERROR;
+    }
+  }
+
+  return RC::SUCCESS;
+}
+
+
 RC Table::open(const char *meta_file, const char *base_dir, CLogManager *clog_manager)
 {
   // 加载元数据文件

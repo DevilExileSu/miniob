@@ -84,6 +84,30 @@ RC Db::create_table(const char *table_name, int attribute_count, const AttrInfo 
   return RC::SUCCESS;
 }
 
+
+RC Db::drop_table(const char *table_name) {
+  // 1. 查找对应表
+  auto it = opened_tables_.find(table_name);
+  if (it == opened_tables_.end()) {
+    LOG_ERROR("Failed to drop table %s due to table not exists.", table_name);
+    return RC::SCHEMA_TABLE_NOT_EXIST;
+  }
+
+  // 2. 删除表相关文件
+  Table *table = it->second;
+  RC rc = table->drop();
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to drop table %s.", table_name);
+    return rc;
+  }
+  // 3. 从opened_tables_中删除
+  opened_tables_.erase(it);
+  // 4. 调用table的析构方法
+  delete table;
+
+  return RC::SUCCESS;
+}
+
 Table *Db::find_table(const char *table_name) const
 {
   std::unordered_map<std::string, Table *>::const_iterator iter = opened_tables_.find(table_name);
