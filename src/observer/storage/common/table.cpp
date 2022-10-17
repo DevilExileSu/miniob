@@ -681,9 +681,96 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
   return rc;
 }
 
+
+class RecordUpdater {
+  public:
+    RecordUpdater(Trx *trx, Table *table, const FieldMeta *field_meta, const Value *value) : trx_(trx), table_(table), field_meta_(field_meta), value_(value) {}
+    RC update_record(Record *record) {
+      RC rc = table_->update_record(trx_, record, field_meta_, value_);
+      if (RC::SUCCESS == rc) {
+        ++updated_count_;
+      }
+      return rc;
+    }
+
+    int updated_count() const {
+      return updated_count_;
+    }
+  
+  private:
+    Trx *trx_;
+    Table *table_;
+    const FieldMeta *field_meta_;
+    const Value *value_;
+    int updated_count_ = 0;
+};
+
+static RC record_update_adapter(Record *record, void *context)
+{
+  RecordUpdater &record_updater = *(RecordUpdater *)context;
+  return record_updater.update_record(record);
+}
+
+RC Table::update_record(Trx *trx, Record *record, const FieldMeta *field_meta, const Value *value) {
+  RC rc = delete_entry_of_indexes(record->data(), record->rid(), false);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to delete indexes of record (rid=%d.%d). rc=%d:%s",
+              record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
+  }
+
+  char *copy_to = record->data() + field_meta->offset();
+
+  // 1. 修改record中的数据
+  if (field_meta->type() == AttrType::CHARS) {
+    memcpy(copy_to, value->data, std::min(field_meta->len(), (int) strlen((char *) value->data)));
+  } else {
+    memcpy(copy_to, value->data, field_meta->len());
+  }
+
+
+  rc = record_handler_->update_record(record);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to update record of record (rid=%d.%d). rc=%d:%s", 
+              record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
+  }
+  rc = insert_entry_of_indexes(record->data(), record->rid());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to insert indexes of record (rid=%d.%d). rc=%d:%s",
+              record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
+  }
+  // 2. 将record写回page中
+  return rc;
+}
+
 RC Table::update_record(Trx *trx, const char *attribute_name, const Value *value, int condition_num,
     const Condition conditions[], int *updated_count)
 {
+
+  // 1. 根据条件创建过滤器
+  CompositeConditionFilter condition_filter;
+  RC rc = condition_filter.init(*this, conditions, condition_num);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to create CompositeConditionFilter!");
+    return rc;
+  }
+
+  // 2. 创建RecordUpdater
+  // 2.1 获取field_meta
+  const FieldMeta *field_meta = table_meta().field(attribute_name);
+  if (nullptr == field_meta) {
+    LOG_ERROR("Invalid value attribute_name: %s", attribute_name);
+    return RC::SCHEMA_FIELD_MISSING;
+  }
+
+
+  // 2.2 创建RecordUpdater
+  RecordUpdater updater = RecordUpdater(trx, this, field_meta, value);
+
+  // 3. 调用scan_record
+  rc = scan_record(trx, &condition_filter, -1, &updater, record_update_adapter);
+  if (updated_count != nullptr) {
+    *updated_count = updater.updated_count();
+  }
   return RC::GENERIC_ERROR;
 }
 
