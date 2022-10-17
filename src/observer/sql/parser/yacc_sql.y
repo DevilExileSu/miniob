@@ -83,6 +83,7 @@ ParserContext *get_context(yyscan_t scanner)
         INT_T
         STRING_T
         FLOAT_T
+		DATE_T
         HELP
         EXIT
         DOT //QUOTE
@@ -115,6 +116,7 @@ ParserContext *get_context(yyscan_t scanner)
 
 %token <number> NUMBER
 %token <floats> FLOAT 
+%token <string> DATE
 %token <string> ID
 %token <string> PATH
 %token <string> SSS
@@ -308,6 +310,18 @@ value:
     |FLOAT{
   		value_init_float(&CONTEXT->values[CONTEXT->value_length++], $1);
 		}
+	|DATE{
+		$1 = substr($1, 1, strlen($1)-2);
+		int res = value_init_date(&CONTEXT->values[CONTEXT->value_length++], $1);
+		char buf[16] = {0};
+		sprintf(buf, "res=%d", res);
+		yyerror(scanner, buf);
+		if (res != 0) {
+			CONTEXT->ssql->flag = SCF_INVALID_DATE;
+			yyresult = 2;
+			goto yyreturnlab;
+		}
+	}
     |SSS {
 			$1 = substr($1,1,strlen($1)-2);
   		value_init_string(&CONTEXT->values[CONTEXT->value_length++], $1);

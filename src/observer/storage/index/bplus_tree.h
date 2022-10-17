@@ -54,6 +54,9 @@ public:
     case CHARS: {
       return compare_string((void *)v1, attr_length_, (void *)v2, attr_length_);
     }
+    case DATES: {
+      return compare_int((void *)v1, (void *)v2);
+    }
     default:{
       LOG_ERROR("unknown attr type. %d", attr_type_);
       abort();
@@ -122,6 +125,13 @@ public:
 	}
 	str.push_back(v[i]);
       }
+      return str;
+    }
+    case DATES: {
+      int value = *(int *)v;
+      char buf[16] = {0};
+      sprintf(buf, "%04d-%02d-%02d", value/10000, (value%10000)/100, value%100);
+      std::string str(buf);
       return str;
     }
     default:{

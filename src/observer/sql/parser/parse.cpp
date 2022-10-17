@@ -40,6 +40,28 @@ void relation_attr_destroy(RelAttr *relation_attr)
   relation_attr->attribute_name = nullptr;
 }
 
+static int8_t day_month[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30 ,31, 30, 31};
+
+int check_date(int y, int m, int d) {
+  bool is_leapyear = ((y % 4 == 0) && (y % 100 != 0)) || (y%400 == 0);
+  int date = y * 10000 + m * 100 + d;
+  if (date > 20380200 || date < 19700101) {
+    return -1;
+  }
+  if (m < 1 || m > 12) {
+    return -1;
+  }
+
+  if (m == 2 && d == 29 && is_leapyear) {
+    return date; 
+  }
+
+  if (d > day_month[m] || d < 1) {
+    return -1;
+  }
+  return date;
+}
+
 void value_init_integer(Value *value, int v)
 {
   value->type = INTS;
@@ -57,6 +79,25 @@ void value_init_string(Value *value, const char *v)
   value->type = CHARS;
   value->data = strdup(v);
 }
+
+int to_date(const char *v) {
+  int y = 0, m = 0, d = 0;
+  sscanf(v, "%d-%d-%d", &y, &m, &d);
+  return check_date(y, m, d);
+}
+
+int value_init_date(Value *value, const char *v) {
+  value->type = DATES; 
+  int date = to_date(v);
+  if (date == -1) {
+    value_init_string(value, v);
+    return -1;
+  }
+  int *p_date = new int(date);
+  value->data = p_date;
+  return 0;
+}
+
 void value_destroy(Value *value)
 {
   value->type = UNDEFINED;
@@ -402,6 +443,8 @@ RC parse(const char *st, Query *sqln)
 
   if (sqln->flag == SCF_ERROR)
     return SQL_SYNTAX;
+  else if (sqln->flag == SCF_INVALID_DATE)
+    return FORMAT;
   else
     return SUCCESS;
 }
