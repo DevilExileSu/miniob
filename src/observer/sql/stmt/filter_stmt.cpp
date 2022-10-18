@@ -91,6 +91,8 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 
   Expression *left = nullptr;
   Expression *right = nullptr;
+  const Value *condition_value = nullptr;
+  const FieldMeta *condition_field = nullptr;
   if (condition.left_is_attr) {
     Table *table = nullptr;
     const FieldMeta *field = nullptr;
@@ -100,7 +102,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       return rc;
     }
     left = new FieldExpr(table, field);
+    condition_field = field;
   } else {
+    condition_value = &condition.left_value;
     left = new ValueExpr(condition.left_value);
   }
 
@@ -114,7 +118,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       return rc;
     }
     right = new FieldExpr(table, field);
+    condition_field = field;
   } else {
+    condition_value = &condition.right_value;
     right = new ValueExpr(condition.right_value);
   }
 
@@ -124,5 +130,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   filter_unit->set_right(right);
 
   // 检查两个类型是否能够比较
+  if (condition_value->type != condition_field->type()) {
+    return RC::GENERIC_ERROR;
+  }
+  
   return rc;
 }

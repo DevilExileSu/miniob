@@ -270,6 +270,7 @@ type:
 	INT_T { $$=INTS; }
        | STRING_T { $$=CHARS; }
        | FLOAT_T { $$=FLOATS; }
+	   | DATE_T { $$=DATES; }
        ;
 ID_get:
 	ID 
@@ -313,13 +314,10 @@ value:
 	|DATE{
 		$1 = substr($1, 1, strlen($1)-2);
 		int res = value_init_date(&CONTEXT->values[CONTEXT->value_length++], $1);
-		char buf[16] = {0};
-		sprintf(buf, "res=%d", res);
-		yyerror(scanner, buf);
 		if (res != 0) {
 			CONTEXT->ssql->flag = SCF_INVALID_DATE;
 			yyresult = 2;
-			goto yyreturnlab;
+			goto yyreturn;
 		}
 	}
     |SSS {

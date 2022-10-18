@@ -722,7 +722,7 @@ RC Table::update_record(Trx *trx, Record *record, const FieldMeta *field_meta, c
 
   // 1. 修改record中的数据
   if (field_meta->type() == AttrType::CHARS) {
-    memcpy(copy_to, value->data, std::min(field_meta->len(), (int) strlen((char *) value->data)));
+    memcpy(copy_to, value->data, std::min(field_meta->len(), (int)strlen((char *) value->data))+1);
   } else {
     memcpy(copy_to, value->data, field_meta->len());
   }
