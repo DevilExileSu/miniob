@@ -17,3 +17,9 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 
 std::string double2string(double v);
+
+int string2int(char *v);
+
+float string2float(char *v);
+
+int check_prefix(char *v);

@@ -45,9 +45,6 @@ static int8_t day_month[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30 ,31, 30, 31};
 int check_date(int y, int m, int d) {
   bool is_leapyear = ((y % 4 == 0) && (y % 100 != 0)) || (y%400 == 0);
   int date = y * 10000 + m * 100 + d;
-  if (date > 20380200 || date < 19700101) {
-    return -1;
-  }
   if (m < 1 || m > 12) {
     return -1;
   }

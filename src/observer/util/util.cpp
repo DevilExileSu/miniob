@@ -30,3 +30,64 @@ std::string double2string(double v)
 
   return std::string(buf, len);
 }
+
+
+std::string int2string(int v) {
+  return std::to_string(v);
+}
+
+std::string float2string(float v) {
+  char buf[256];
+  snprintf(buf, sizeof(buf), "0.2f", v);
+  size_t len = strlen(buf);
+  while (buf[len - 1] == '0') {
+    len--;
+  }
+  if (buf[len - 1] == '.') {
+    len--;
+  }
+  return std::string(buf, len);
+}
+
+
+int float2int(float v) {
+  return static_cast<int>(v + 0.5);
+}
+
+float int2float(int v) {
+ return static_cast<float>(v); 
+}
+
+int string2int(std::string v) {
+  return atoi(v.c_str());
+}
+
+float string2float(std::string v) {
+  return atof(v.c_str());
+}
+
+int check_prefix(std::string v) {
+  int res = 1;
+  int dot_cnt = 0;
+  for (size_t i = 0; i < v.size(); i++) {
+    if (v[i] >= '0' && v[i] <= '9') {
+      continue;
+    } else if (v[i] == '.' && i > 0 && dot_cnt == 0) {
+        ++dot_cnt;
+      res = 2;
+    } else if (i > 0) {
+      if (v[i-1] == '.') {
+        res = 1;
+        v = v.substr(0, i-1);
+      } else {
+        v = v.substr(0, i);
+      }
+      return res;
+    } else {
+      res = 0;
+      break;
+    } 
+  }
+  return res;
+}
+ 
