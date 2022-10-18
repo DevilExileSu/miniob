@@ -91,3 +91,30 @@ int check_prefix(std::string v) {
   return res;
 }
  
+
+ // TODO 改成贪心，leetcode 44
+ bool like_match(const char *a, const char *b) {
+  int m = strlen(a);
+  int n = strlen(b);
+  int dp[m+1][n+1];
+  memset(dp, 0, sizeof(dp));
+  dp[0][0] = true;
+  for (int i=1; i<=n; ++i) {
+    if (b[i-1] == '%') {
+      dp[0][i] = true;
+    } else {
+      break;
+    }
+  }
+
+  for (int i=1; i<=m; ++i) {
+    for (int j=1; j<=n; ++j) {
+      if (b[j-1] == '%') {
+        dp[i][j] = dp[i][j-1] | dp[i-1][j];
+      } else if (b[j-1] == '_' || a[i-1] == b[j-1]) {
+        dp[i][j] = dp[i-1][j-1];
+      }
+    }
+  }
+  return dp[m][n];
+ }

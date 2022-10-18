@@ -23,3 +23,5 @@ int string2int(char *v);
 float string2float(char *v);
 
 int check_prefix(char *v);
+
+bool like_match(const char *a, const char *b);

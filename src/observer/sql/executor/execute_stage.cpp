@@ -383,7 +383,12 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
     right_cell = nullptr;
     right_inclusive = false;
   } break;
-
+  case LIKE_MATCH: {
+    left_cell = &value;
+    right_cell = &value;
+    left_inclusive = true;
+    right_inclusive = true;
+  } break;
   default: {
     LOG_WARN("should not happen. comp=%d", comp);
   } break;
