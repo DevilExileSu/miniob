@@ -16,6 +16,11 @@ typedef struct ParserContext {
   size_t condition_length;
   size_t from_length;
   size_t value_length;
+  
+  // 一条insert插入多条数据
+  size_t insert_num;
+  Insert insert_list[MAX_NUM];
+
   Value values[MAX_NUM];
   Condition conditions[MAX_NUM];
   CompOp comp;
@@ -43,7 +48,7 @@ void yyerror(yyscan_t scanner, const char *str)
   context->from_length = 0;
   context->select_length = 0;
   context->value_length = 0;
-  context->ssql->sstr.insertion.value_num = 0;
+  context->ssql->sstr.insertion.insert_num = 0;
   printf("parse sql failed. error=%s", str);
 }
 
@@ -97,6 +102,7 @@ ParserContext *get_context(yyscan_t scanner)
         LOAD
         DATA
         INFILE
+		LIKE
         EQ
         LT
         GT
@@ -282,7 +288,7 @@ ID_get:
 
 	
 insert:				/*insert   语句的语法解析树*/
-    INSERT INTO ID VALUES LBRACE value value_list RBRACE SEMICOLON 
+    INSERT INTO ID VALUES tuple tuple_list SEMICOLON 
 		{
 			// CONTEXT->values[CONTEXT->value_length++] = *$6;
 
@@ -292,11 +298,26 @@ insert:				/*insert   语句的语法解析树*/
 			// for(i = 0; i < CONTEXT->value_length; i++){
 			// 	CONTEXT->ssql->sstr.insertion.values[i] = CONTEXT->values[i];
       // }
-			inserts_init(&CONTEXT->ssql->sstr.insertion, $3, CONTEXT->values, CONTEXT->value_length);
+			inserts_init(&CONTEXT->ssql->sstr.insertion, $3, CONTEXT->insert_list, CONTEXT->insert_num);
 
       //临时变量清零
       CONTEXT->value_length=0;
+	  CONTEXT->insert_num=0;
     }
+	;
+
+tuple_list: 
+	| COMMA tuple tuple_list {
+
+	}
+	;
+
+	tuple: 
+	LBRACE value value_list RBRACE {
+		insert_init(&CONTEXT->insert_list[CONTEXT->insert_num++], CONTEXT->values, CONTEXT->value_length);
+		CONTEXT->value_length=0;
+	}
+	;
 
 value_list:
     /* empty */
@@ -572,6 +593,7 @@ comOp:
     | LE { CONTEXT->comp = LESS_EQUAL; }
     | GE { CONTEXT->comp = GREAT_EQUAL; }
     | NE { CONTEXT->comp = NOT_EQUAL; }
+	| LIKE { CONTEXT->comp = LIKE_MATCH; }
     ;
 
 load_data:

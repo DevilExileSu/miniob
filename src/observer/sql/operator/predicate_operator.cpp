@@ -76,6 +76,7 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
 
     const int compare = left_cell.compare(right_cell);
     bool filter_result = false;
+    // TODO: 添加like匹配
     switch (comp) {
     case EQUAL_TO: {
       filter_result = (0 == compare); 
@@ -94,6 +95,9 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     } break;
     case GREAT_THAN: {
       filter_result = (compare > 0);
+    } break;
+    case LIKE_MATCH: {
+      filter_result = false;
     } break;
     default: {
       LOG_WARN("invalid compare type: %d", comp);

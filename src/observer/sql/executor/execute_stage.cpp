@@ -325,6 +325,7 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
     case LESS_THAN:   { comp = GREAT_EQUAL; } break;
     case GREAT_EQUAL: { comp = LESS_THAN; }   break;
     case GREAT_THAN:  { comp = LESS_EQUAL; }  break;
+    case LIKE_MATCH:  { comp = LIKE_MATCH; }  break;
     default: {
     	LOG_WARN("should not happen");
     }
@@ -562,31 +563,37 @@ RC ExecuteStage::do_insert(SQLStageEvent *sql_event)
 
   InsertStmt *insert_stmt = (InsertStmt *)stmt;
   Table *table = insert_stmt->table();
+  std::vector<const Value*> values_list = insert_stmt->values();
+  std::vector<int> values_amount_list = insert_stmt->value_amount();
+  RC rc = RC::SUCCESS;
 
-  RC rc = table->insert_record(trx, insert_stmt->value_amount(), insert_stmt->values());
-  if (rc == RC::SUCCESS) {
-    if (!session->is_trx_multi_operation_mode()) {
-      CLogRecord *clog_record = nullptr;
-      rc = clog_manager->clog_gen_record(CLogType::REDO_MTR_COMMIT, trx->get_current_id(), clog_record);
-      if (rc != RC::SUCCESS || clog_record == nullptr) {
-        session_event->set_response("FAILURE\n");
-        return rc;
+  for (size_t i = 0; i < values_list.size(); i++) {
+    rc = table->insert_record(trx, values_amount_list[i], values_list[i]);
+    if (rc == RC::SUCCESS) {
+      if (!session->is_trx_multi_operation_mode()) {
+        CLogRecord *clog_record = nullptr;
+        rc = clog_manager->clog_gen_record(CLogType::REDO_MTR_COMMIT, trx->get_current_id(), clog_record);
+        if (rc != RC::SUCCESS || clog_record == nullptr) {
+          session_event->set_response("FAILURE\n");
+          return rc;
+        }
+
+        rc = clog_manager->clog_append_record(clog_record);
+        if (rc != RC::SUCCESS) {
+          session_event->set_response("FAILURE\n");
+          return rc;
+        }
+
+        trx->next_current_id();
+        session_event->set_response("SUCCESS\n");
+      } else {
+        session_event->set_response("SUCCESS\n");
       }
-
-      rc = clog_manager->clog_append_record(clog_record);
-      if (rc != RC::SUCCESS) {
-        session_event->set_response("FAILURE\n");
-        return rc;
-      } 
-
-      trx->next_current_id();
-      session_event->set_response("SUCCESS\n");
     } else {
-      session_event->set_response("SUCCESS\n");
+      session_event->set_response("FAILURE\n");
     }
-  } else {
-    session_event->set_response("FAILURE\n");
   }
+
   return rc;
 }
 
