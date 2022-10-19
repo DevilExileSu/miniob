@@ -163,8 +163,12 @@ const IndexMeta *TableMeta::index(const char *name) const
 const IndexMeta *TableMeta::find_index_by_field(const char *field) const
 {
   for (const IndexMeta &index : indexes_) {
-    if (0 == strcmp(index.field(), field)) {
-      return &index;
+    const std::vector<std::string> fields = index.fields();
+    // TODO(vanish): Multi-index 暂时只要field在索引列表中就直接返回
+    for (auto field_name: fields) {
+      if (0 == strcmp(field_name.c_str(), field)) {
+        return &index;
+      }
     }
   }
   return nullptr;

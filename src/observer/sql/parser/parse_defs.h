@@ -142,6 +142,10 @@ typedef struct {
 } DropIndex;
 
 typedef struct {
+  char *relation_name;  // Relation name
+} ShowIndex;
+
+typedef struct {
   const char *relation_name;
 } DescTable;
 
@@ -161,6 +165,7 @@ union Queries {
   DropIndex drop_index;
   DescTable desc_table;
   LoadData load_data;
+  ShowIndex show_index;
   char *errors;
 };
 
@@ -186,6 +191,7 @@ enum SqlCommandFlag {
   SCF_HELP,
   SCF_EXIT,
   SCF_INVALID_DATE,
+  SCF_SHOW_INDEX,
 };
 // struct of flag and sql_struct
 typedef struct Query {
@@ -247,6 +253,9 @@ void create_index_destroy(CreateIndex *create_index);
 
 void drop_index_init(DropIndex *drop_index, const char *index_name);
 void drop_index_destroy(DropIndex *drop_index);
+
+void show_index_init(ShowIndex *show_index, const char *relation_name);
+void show_index_destroy(ShowIndex *show_index);
 
 void desc_table_init(DescTable *desc_table, const char *relation_name);
 void desc_table_destroy(DescTable *desc_table);
