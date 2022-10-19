@@ -31,7 +31,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/clog/clog.h"
 
 const static int IDNEX_HEADER_NUM = 5;
-const static char *INDEX_HEADER[] = {"Table", "Non_unqiue", "Key_name", "Seq_in_index", "Column_name"};
+const static char *INDEX_HEADER[] = {"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name"};
 
 Table::~Table()
 {
