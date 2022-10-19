@@ -99,6 +99,10 @@ ParserContext *get_context(yyscan_t scanner)
         AND
         SET
         ON
+		IN
+		NOT
+		EXIST
+		JOIN
         LOAD
         DATA
         INFILE
@@ -299,20 +303,20 @@ insert:				/*insert   语句的语法解析树*/
 			// 	CONTEXT->ssql->sstr.insertion.values[i] = CONTEXT->values[i];
       // }
 			inserts_init(&CONTEXT->ssql->sstr.insertion, $3, CONTEXT->insert_list, CONTEXT->insert_num);
-
       //临时变量清零
       CONTEXT->value_length=0;
 	  CONTEXT->insert_num=0;
+	  memset(CONTEXT->insert_list, 0, sizeof(CONTEXT->insert_list));
     }
-	;
+	
 
 tuple_list: 
 	| COMMA tuple tuple_list {
-
 	}
 	;
 
-	tuple: 
+
+tuple: 
 	LBRACE value value_list RBRACE {
 		insert_init(&CONTEXT->insert_list[CONTEXT->insert_num++], CONTEXT->values, CONTEXT->value_length);
 		CONTEXT->value_length=0;

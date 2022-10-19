@@ -50,10 +50,9 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
   std::vector<int> value_amount_list;
 
   for (int i = 0; i < inserts.insert_num; i++) {
-    const Insert insert = inserts.inserts[i];
-    const Value *values = insert.values;
-    int value_num = insert.value_num;
-
+    // const Insert insert = inserts.inserts[i];
+    // const Value *values = insert.values;
+    int value_num = inserts.inserts[i].value_num;
     // check the fields number
     if (field_num != value_num) {
       LOG_WARN("schema mismatch. value num=%d, field num in schema=%d", value_num, field_num);
@@ -61,15 +60,16 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
     }
 
     // check fields type
-    for (int i = 0;  i < value_num; i++) {
-      const AttrType value_type = values[i].type;
-      if (field_list[i]->type() != value_type) { // TODO try to convert the value type to field type
+    for (int j = 0;  j < value_num; j++) {
+      const AttrType value_type = inserts.inserts[i].values[j].type;
+      if (field_list[j]->type() != value_type) { // TODO try to convert the value type to field type
         LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d", 
-                table_name, field_list[i]->name(), field_list[i]->type(), value_type);
+                table_name, field_list[j]->name(), field_list[j]->type(), value_type);
         return RC::SCHEMA_FIELD_TYPE_MISMATCH;
       }
     }
-    values_list.emplace_back(values);
+    values_list.emplace_back(&inserts.inserts[i].values[0]);
+    // values_list.emplace_back(&insert.values[0]);
     value_amount_list.emplace_back(value_num);
   }
 

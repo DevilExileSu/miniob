@@ -186,9 +186,7 @@ void selects_destroy(Selects *selects)
 
 void insert_init(Insert *insert, Value values[], size_t value_num) {
   assert(value_num <= sizeof(insert->values) / sizeof(insert->values[0]));
-  for (size_t i = 0; i < value_num; i++) {
-    insert->values[i] = values[i];
-  }
+  memcpy(insert->values, values, sizeof(Value) * value_num);
   insert->value_num = value_num;
 }
 
