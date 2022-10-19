@@ -16,17 +16,17 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "storage/common/db.h"
 #include "storage/common/table.h"
+#include <cmath>
 
 InsertStmt::InsertStmt(Table *table, std::vector<const Value *> &&values, std::vector<int> &&value_amount)
-  : table_ (table), values_(values), value_amount_(value_amount)
+    : table_(table), values_(values), value_amount_(value_amount)
 {}
 
 RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
 {
   const char *table_name = inserts.relation_name;
   if (nullptr == db || nullptr == table_name || inserts.insert_num <= 0) {
-    LOG_WARN("invalid argument. db=%p, table_name=%p, value_num=%d", 
-             db, table_name, inserts.insert_num);
+    LOG_WARN("invalid argument. db=%p, table_name=%p, value_num=%d", db, table_name, inserts.insert_num);
     return RC::INVALID_ARGUMENT;
   }
 
@@ -42,7 +42,7 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
   const int sys_field_num = table_meta.sys_field_num();
 
   std::vector<const FieldMeta *> field_list;
-  for (int i=0; i < field_num; i++) {
+  for (int i = 0; i < field_num; i++) {
     field_list.emplace_back(table_meta.field(i + sys_field_num));
   }
 
@@ -50,8 +50,8 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
   std::vector<int> value_amount_list;
 
   for (int i = 0; i < inserts.insert_num; i++) {
-    const Insert insert = inserts.inserts[i];
-    const Value *values = insert.values;
+    Insert insert = inserts.inserts[i];
+    Value *values = insert.values;
     int value_num = insert.value_num;
 
     // check the fields number
@@ -61,12 +61,65 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
     }
 
     // check fields type
-    for (int i = 0;  i < value_num; i++) {
+    for (int i = 0; i < value_num; i++) {
       const AttrType value_type = values[i].type;
-      if (field_list[i]->type() != value_type) { // TODO try to convert the value type to field type
-        LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d", 
-                table_name, field_list[i]->name(), field_list[i]->type(), value_type);
-        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      if (field_list[i]->type() != value_type) {  // TODO try to convert the value type to field type
+        switch (field_list[i]->type()) {
+          case INTS:
+            switch (value_type) {
+              case FLOATS: {
+                *(int *)values[i].data = round(*(float *)values[i].data);
+                values[i].type = INTS;
+                break;
+              }
+              case CHARS: {
+                *(int *)values[i].data = atoi((char *)values[i].data);
+                values[i].type = INTS;
+                break;
+              }
+              default:
+                LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_list[i]->type());
+                return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
+            break;
+          case FLOATS:
+            switch (value_type) {
+              case INTS: {
+                *(float *)values[i].data = *(int *)values[i].data;
+                values[i].type = FLOATS;
+                break;
+              }
+              case CHARS: {
+                *(float *)values[i].data = atof((char *)values[i].data);
+                values[i].type = FLOATS;
+                break;
+              }
+              default:
+                LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_list[i]->type());
+                return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
+            break;
+          case CHARS:
+            switch (value_type) {
+              case INTS: {
+                *(char *)values[i].data = *(int *)values[i].data;
+                values[i].type = CHARS;
+                break;
+              }
+              case FLOATS: {
+                *(char *)values[i].data = *(float *)values[i].data;
+                values[i].type = CHARS;
+                break;
+              }
+              default:
+                LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_list[i]->type());
+                return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
+            break;
+          default:
+            LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_list[i]->type());
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        }
       }
     }
     values_list.emplace_back(values);

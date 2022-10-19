@@ -19,4 +19,6 @@ GTAGS
 miniob/*
 observer.*
 test/case/result_tmp
+CMakeLists.txt
+test
 #*#

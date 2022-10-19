@@ -5,6 +5,9 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_CXX_STANDARD 14)
 #SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
+set(CMAKE_BUILD_TYPE "Debug")
+set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g -ggdb")
+
 project(minidb)
 
 MESSAGE(STATUS "This is SOURCE dir " ${test_SOURCE_DIR})
