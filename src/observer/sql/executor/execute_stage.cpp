@@ -155,68 +155,75 @@ void ExecuteStage::handle_request(common::StageEvent *event)
     }
   } else {
     switch (sql->flag) {
-      case SCF_HELP: {
-        do_help(sql_event);
-      } break;
-      case SCF_CREATE_TABLE: {
-        do_create_table(sql_event);
-      } break;
-      case SCF_CREATE_INDEX: {
-        do_create_index(sql_event);
-      } break;
-      case SCF_SHOW_TABLES: {
-        do_show_tables(sql_event);
-      } break;
-      case SCF_DESC_TABLE: {
-        do_desc_table(sql_event);
-      } break;
+    case SCF_HELP: {
+      do_help(sql_event);
+    } break;
+    case SCF_CREATE_TABLE: {
+      do_create_table(sql_event);
+    } break;
+    case SCF_CREATE_INDEX: {
+      do_create_index(sql_event);
+    } break;
+    case SCF_SHOW_TABLES: {
+      do_show_tables(sql_event);
+    } break;
+    case SCF_DESC_TABLE: {
+      do_desc_table(sql_event);
+    } break;
 
-      case SCF_DROP_TABLE: {
-        do_drop_table(sql_event);
-      } break;
-
-      case SCF_DROP_INDEX:
-      case SCF_LOAD_DATA: {
-        default_storage_stage_->handle_event(event);
-      } break;
-      case SCF_SYNC: {
-        /*
-        RC rc = DefaultHandler::get_default().sync();
-        session_event->set_response(strrc(rc));
-        */
-      } break;
-      case SCF_BEGIN: {
-        do_begin(sql_event);
-        /*
-        session_event->set_response("SUCCESS\n");
-        */
-      } break;
-      case SCF_COMMIT: {
-        do_commit(sql_event);
-        /*
-        Trx *trx = session->current_trx();
-        RC rc = trx->commit();
-        session->set_trx_multi_operation_mode(false);
-        session_event->set_response(strrc(rc));
-        */
-      } break;
-      case SCF_CLOG_SYNC: {
-        do_clog_sync(sql_event);
-      }
-      case SCF_ROLLBACK: {
-        Trx *trx = session_event->get_client()->session->current_trx();
-        RC rc = trx->rollback();
-        session->set_trx_multi_operation_mode(false);
-        session_event->set_response(strrc(rc));
-      } break;
-      case SCF_EXIT: {
-        // do nothing
-        const char *response = "Unsupported\n";
-        session_event->set_response(response);
-      } break;
-      default: {
-        LOG_ERROR("Unsupported command=%d\n", sql->flag);
-      }
+    case SCF_DROP_TABLE: {
+      do_drop_table(sql_event);
+    } break; 
+    
+    case SCF_DROP_INDEX: {
+      // do nothing
+      const char *response = "Unsupported\n";
+      session_event->set_response(response);
+    } break;
+    case SCF_SHOW_INDEX: {
+      do_show_index(sql_event);
+    } break; 
+    case SCF_LOAD_DATA: {
+      default_storage_stage_->handle_event(event);
+    } break;
+    case SCF_SYNC: {
+      /*
+      RC rc = DefaultHandler::get_default().sync();
+      session_event->set_response(strrc(rc));
+      */
+    } break;
+    case SCF_BEGIN: {
+      do_begin(sql_event);
+      /*
+      session_event->set_response("SUCCESS\n");
+      */
+    } break;
+    case SCF_COMMIT: {
+      do_commit(sql_event);
+      /*
+      Trx *trx = session->current_trx();
+      RC rc = trx->commit();
+      session->set_trx_multi_operation_mode(false);
+      session_event->set_response(strrc(rc));
+      */
+    } break;
+    case SCF_CLOG_SYNC: {
+      do_clog_sync(sql_event);
+    }
+    case SCF_ROLLBACK: {
+      Trx *trx = session_event->get_client()->session->current_trx();
+      RC rc = trx->rollback();
+      session->set_trx_multi_operation_mode(false);
+      session_event->set_response(strrc(rc));
+    } break;
+    case SCF_EXIT: {
+      // do nothing
+      const char *response = "Unsupported\n";
+      session_event->set_response(response);
+    } break;
+    default: {
+      LOG_ERROR("Unsupported command=%d\n", sql->flag);
+    }
     }
   }
 }
@@ -319,30 +326,19 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
   if (left->type() == ExprType::VALUE && right->type() == ExprType::FIELD) {
     std::swap(left, right);
     switch (comp) {
-      case EQUAL_TO: {
-        comp = EQUAL_TO;
-      } break;
-      case LESS_EQUAL: {
-        comp = GREAT_THAN;
-      } break;
-      case NOT_EQUAL: {
-        comp = NOT_EQUAL;
-      } break;
-      case LESS_THAN: {
-        comp = GREAT_EQUAL;
-      } break;
-      case GREAT_EQUAL: {
-        comp = LESS_THAN;
-      } break;
-      case GREAT_THAN: {
-        comp = LESS_EQUAL;
-      } break;
-      case LIKE_MATCH: {
-        comp = LIKE_MATCH;
-      } break;
-      default: {
-        LOG_WARN("should not happen");
-      }
+    case EQUAL_TO:    { comp = EQUAL_TO; }    break;
+    case LESS_EQUAL:  { comp = GREAT_THAN; }  break;
+    case NOT_EQUAL:   { comp = NOT_EQUAL; }   break;
+    case LESS_THAN:   { comp = GREAT_EQUAL; } break;
+    case GREAT_EQUAL: { comp = LESS_THAN; }   break;
+    case GREAT_THAN:  { comp = LESS_EQUAL; }  break;
+    case LIKE_MATCH:  { comp = LIKE_MATCH; }  break;
+    case NOT_LIKE:    { comp = NOT_LIKE; }    break;
+    case IN_OP:          { comp = IN_OP; }          break;
+    case NOT_IN_OP:      { comp = NOT_IN_OP; }      break;
+    default: {
+    	LOG_WARN("should not happen");
+    }
     }
   }
 
@@ -362,52 +358,65 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
   bool right_inclusive = false;
 
   switch (comp) {
-    case EQUAL_TO: {
-      left_cell = &value;
-      right_cell = &value;
-      left_inclusive = true;
-      right_inclusive = true;
-    } break;
+  case EQUAL_TO: {
+    left_cell = &value;
+    right_cell = &value;
+    left_inclusive = true;
+    right_inclusive = true;
+  } break;
 
-    case LESS_EQUAL: {
-      left_cell = nullptr;
-      left_inclusive = false;
-      right_cell = &value;
-      right_inclusive = true;
-    } break;
+  case LESS_EQUAL: {
+    left_cell = nullptr;
+    left_inclusive = false;
+    right_cell = &value;
+    right_inclusive = true;
+  } break;
 
-    case LESS_THAN: {
-      left_cell = nullptr;
-      left_inclusive = false;
-      right_cell = &value;
-      right_inclusive = false;
-    } break;
+  case LESS_THAN: {
+    left_cell = nullptr;
+    left_inclusive = false;
+    right_cell = &value;
+    right_inclusive = false;
+  } break;
 
-    case GREAT_EQUAL: {
-      left_cell = &value;
-      left_inclusive = true;
-      right_cell = nullptr;
-      right_inclusive = false;
-    } break;
+  case GREAT_EQUAL: {
+    left_cell = &value;
+    left_inclusive = true;
+    right_cell = nullptr;
+    right_inclusive = false;
+  } break;
 
-    case GREAT_THAN: {
-      left_cell = &value;
-      left_inclusive = false;
-      right_cell = nullptr;
-      right_inclusive = false;
-    } break;
-    case LIKE_MATCH: {
-      left_cell = &value;
-      right_cell = &value;
-      left_inclusive = true;
-      right_inclusive = true;
-    } break;
-    default: {
-      LOG_WARN("should not happen. comp=%d", comp);
-    } break;
+  case GREAT_THAN: {
+    left_cell = &value;
+    left_inclusive = false;
+    right_cell = nullptr;
+    right_inclusive = false;
+  } break;
+  case LIKE_MATCH: {
+    left_cell = &value;
+    right_cell = &value;
+    left_inclusive = true;
+    right_inclusive = true;
+  } break;
+  case NOT_LIKE: {
+    left_cell = &value;
+    right_cell = &value;
+    left_inclusive = true;
+    right_inclusive = true;
+  } break;
+  case IN_OP: {
+
+  } break;
+  case NOT_IN_OP: {
+
+  } break;
+  default: {
+    LOG_WARN("should not happen. comp=%d", comp);
+  } break;
   }
 
-  IndexScanOperator *oper = new IndexScanOperator(table, index, left_cell, left_inclusive, right_cell, right_inclusive);
+  IndexScanOperator *oper = new IndexScanOperator(table, index,
+       left_cell, left_inclusive, right_cell, right_inclusive);
 
   LOG_INFO("use index for scan: %s in table %s", index->index_meta().name(), table->name());
   return oper;
@@ -526,6 +535,21 @@ RC ExecuteStage::do_create_index(SQLStageEvent *sql_event)
 
   RC rc = table->create_index(nullptr, create_index.index_name, create_index.attribute_name);
   sql_event->session_event()->set_response(rc == RC::SUCCESS ? "SUCCESS\n" : "FAILURE\n");
+  return rc;
+}
+
+RC ExecuteStage::do_show_index(SQLStageEvent *sql_event) {
+  SessionEvent *session_event = sql_event->session_event();
+  Db *db = session_event->session()->get_current_db();
+  const ShowIndex &show_index = sql_event->query()->sstr.show_index;
+  Table *table = db->find_table(show_index.relation_name);
+  if (nullptr == table) {
+    session_event->set_response("FAILURE\n");
+    return RC::SCHEMA_TABLE_NOT_EXIST;
+  }
+  std::stringstream ss;
+  RC rc = table->show_index(ss);
+  sql_event->session_event()->set_response(rc == RC::SUCCESS ? ss.str().c_str() : "FAILURE\n");
   return rc;
 }
 

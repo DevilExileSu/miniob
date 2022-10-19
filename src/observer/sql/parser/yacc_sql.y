@@ -99,6 +99,10 @@ ParserContext *get_context(yyscan_t scanner)
         AND
         SET
         ON
+		IN
+		NOT
+		EXIST
+		JOIN
         LOAD
         DATA
         INFILE
@@ -153,6 +157,7 @@ command:
 	| desc_table
 	| create_index	
 	| drop_index
+	| show_index
 	| sync
 	| begin
 	| commit
@@ -230,6 +235,14 @@ drop_index:			/*drop index 语句的语法解析树*/
 			drop_index_init(&CONTEXT->ssql->sstr.drop_index, $3);
 		}
     ;
+
+show_index:
+	SHOW INDEX FROM ID SEMICOLON{
+			CONTEXT->ssql->flag = SCF_SHOW_INDEX;
+			show_index_init(&CONTEXT->ssql->sstr.show_index, $4);
+		}
+	;
+	
 create_table:		/*create table 语句的语法解析树*/
     CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE SEMICOLON 
 		{
@@ -299,20 +312,20 @@ insert:				/*insert   语句的语法解析树*/
 			// 	CONTEXT->ssql->sstr.insertion.values[i] = CONTEXT->values[i];
       // }
 			inserts_init(&CONTEXT->ssql->sstr.insertion, $3, CONTEXT->insert_list, CONTEXT->insert_num);
-
       //临时变量清零
       CONTEXT->value_length=0;
 	  CONTEXT->insert_num=0;
+	  memset(CONTEXT->insert_list, 0, sizeof(CONTEXT->insert_list));
     }
-	;
+	
 
 tuple_list: 
 	| COMMA tuple tuple_list {
-
 	}
 	;
 
-	tuple: 
+
+tuple: 
 	LBRACE value value_list RBRACE {
 		insert_init(&CONTEXT->insert_list[CONTEXT->insert_num++], CONTEXT->values, CONTEXT->value_length);
 		CONTEXT->value_length=0;
@@ -593,6 +606,9 @@ comOp:
     | GE { CONTEXT->comp = GREAT_EQUAL; }
     | NE { CONTEXT->comp = NOT_EQUAL; }
 	| LIKE { CONTEXT->comp = LIKE_MATCH; }
+	| NOT LIKE { CONTEXT->comp = NOT_LIKE; }
+	| IN { CONTEXT->comp = IN_OP; }
+	| NOT IN { CONTEXT->comp = NOT_IN_OP; }
     ;
 
 load_data:

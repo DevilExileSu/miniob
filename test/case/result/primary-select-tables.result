@@ -105,3 +105,15 @@ CREATE TABLE Select_tables_6(id int, res int);
 SUCCESS
 SELECT Select_tables_1.id,Select_tables_6.id from Select_tables_1, Select_tables_6 where Select_tables_1.id=Select_tables_6.id;
 SELECT_TABLES_1.ID | SELECT_TABLES_6.ID
+
+
+SUCCESS
+1. SHOW INDEX
+SHOW INDEX FROM Index_table_1;
+-TABLE | NON_UNIQUE | KEY_NAME | SEQ_IN_INDEX | COLUMN_NAME
++TABLE | NON_UNQIUE | KEY_NAME | SEQ_IN_INDEX | COLUMN_NAME
+CREATE INDEX index_id on Index_table_1(id);
+SUCCESS
+SHOW INDEX FROM Index_table_1;
+INDEX_TABLE_1 | 1 | INDEX_ID | 1 | ID
+-TABLE | NON_UNIQUE | KEY_NAME | SEQ_IN_INDEX | COLUMN_NAME

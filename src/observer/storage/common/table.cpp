@@ -30,6 +30,9 @@ See the Mulan PSL v2 for more details. */
 #include "storage/trx/trx.h"
 #include "storage/clog/clog.h"
 
+const static int IDNEX_HEADER_NUM = 5;
+const static char *INDEX_HEADER[] = {"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name"};
+
 Table::~Table()
 {
   if (record_handler_ != nullptr) {
@@ -193,16 +196,21 @@ RC Table::open(const char *meta_file, const char *base_dir, CLogManager *clog_ma
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; i++) {
     const IndexMeta *index_meta = table_meta_.index(i);
-    const FieldMeta *field_meta = table_meta_.field(index_meta->field());
-    if (field_meta == nullptr) {
-      LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
-          name(),
-          index_meta->name(),
-          index_meta->field());
-      // skip cleanup
-      //  do all cleanup action in destructive Table function
-      return RC::GENERIC_ERROR;
+    const std::vector<std::string> fields = index_meta->fields();
+    for (auto field: fields) {
+      const FieldMeta *field_meta = table_meta_.field(field.c_str());
+      if (field_meta == nullptr) {
+        LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
+            name(),
+            index_meta->name(),
+            field.c_str());
+        // skip cleanup
+        //  do all cleanup action in destructive Table function
+        return RC::GENERIC_ERROR;
+      }
     }
+    // TODO(vanish): Multi-index 暂时只取一个field_meta，后面需要修改index模块下内容
+    const FieldMeta *field_meta = table_meta_.field(fields[0].c_str());
 
     BplusTreeIndex *index = new BplusTreeIndex();
     std::string index_file = table_index_file(base_dir, name(), index_meta->name());
@@ -592,6 +600,7 @@ static RC insert_index_record_reader_adapter(Record *record, void *context)
   return inserter.insert_index(record);
 }
 
+// TODO(vanish): Multi-index 修改arribute_name为数组
 RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_name)
 {
   if (common::is_blank(index_name) || common::is_blank(attribute_name)) {
@@ -610,8 +619,11 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
     return RC::SCHEMA_FIELD_MISSING;
   }
 
+  std::vector<std::string> fields;
+  fields.emplace_back(field_meta->name());
+
   IndexMeta new_index_meta;
-  RC rc = new_index_meta.init(index_name, *field_meta);
+  RC rc = new_index_meta.init(index_name, std::move(fields));
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s, field_name:%s",
              name(), index_name, attribute_name);
@@ -681,6 +693,24 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
   return rc;
 }
 
+RC Table::show_index(std::ostream &os) {
+  for (int i=0; i < IDNEX_HEADER_NUM; i++) {
+    if (i != 0) {
+      os << " | ";
+    }
+    os << INDEX_HEADER[i];
+  }
+  os << '\n';
+  for (Index *index: indexes_) {
+    const IndexMeta index_meta = index->index_meta();
+    auto fields = index_meta.fields();
+    bool non_unique = !index_meta.unique();
+    for (int i=0; i<fields.size(); i++) {
+      os << name() << " | " << non_unique << " | " << index_meta.name() << " | " <<  i+1 << " | " << fields[i] << "\n";
+    }
+  }
+  return RC::SUCCESS;
+}
 
 class RecordUpdater {
   public:

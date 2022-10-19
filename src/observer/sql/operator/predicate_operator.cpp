@@ -100,6 +100,15 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     case LIKE_MATCH: {
       filter_result = like_match(left_cell.data(), right_cell.data());
     } break;
+    case NOT_LIKE: {
+      filter_result = !like_match(left_cell.data(), right_cell.data());
+    } break;
+    case IN_OP: {
+      filter_result = false;
+    } break;
+    case NOT_IN_OP: {
+      filter_result = false;
+    } break;
     default: {
       LOG_WARN("invalid compare type: %d", comp);
     } break;

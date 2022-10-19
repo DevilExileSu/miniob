@@ -37,6 +37,9 @@ typedef enum {
   GREAT_EQUAL,  //">="    4
   GREAT_THAN,   //">"     5
   LIKE_MATCH,   // like   6
+  NOT_LIKE,     // not like  
+  IN_OP,           // in 
+  NOT_IN_OP,       // not in
   NO_OP
 } CompOp;
 
@@ -66,6 +69,7 @@ typedef struct _Condition {
                        // 1时，操作符右边是属性名，0时，是属性值
   RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value right_value;   // right-hand side value if right_is_attr = FALSE
+  int has_not;         // CompOp前是否有NOT限定词
 } Condition;
 
 // struct of select
@@ -138,6 +142,10 @@ typedef struct {
 } DropIndex;
 
 typedef struct {
+  char *relation_name;  // Relation name
+} ShowIndex;
+
+typedef struct {
   const char *relation_name;
 } DescTable;
 
@@ -157,6 +165,7 @@ union Queries {
   DropIndex drop_index;
   DescTable desc_table;
   LoadData load_data;
+  ShowIndex show_index;
   char *errors;
 };
 
@@ -182,6 +191,7 @@ enum SqlCommandFlag {
   SCF_HELP,
   SCF_EXIT,
   SCF_INVALID_DATE,
+  SCF_SHOW_INDEX,
 };
 // struct of flag and sql_struct
 typedef struct Query {
@@ -243,6 +253,9 @@ void create_index_destroy(CreateIndex *create_index);
 
 void drop_index_init(DropIndex *drop_index, const char *index_name);
 void drop_index_destroy(DropIndex *drop_index);
+
+void show_index_init(ShowIndex *show_index, const char *relation_name);
+void show_index_destroy(ShowIndex *show_index);
 
 void desc_table_init(DescTable *desc_table, const char *relation_name);
 void desc_table_destroy(DescTable *desc_table);

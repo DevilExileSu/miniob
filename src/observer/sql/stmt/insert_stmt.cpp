@@ -122,7 +122,8 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
         }
       }
     }
-    values_list.emplace_back(values);
+    values_list.emplace_back(&inserts.inserts[i].values[0]);
+    // values_list.emplace_back(&insert.values[0]);
     value_amount_list.emplace_back(value_num);
   }
 

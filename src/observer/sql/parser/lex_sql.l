@@ -50,6 +50,10 @@ QUOTE            [\'\"]
 [Tt][Aa][Bb][Ll][Ee][Ss]                             RETURN_TOKEN(TABLES);
 [Ii][Nn][Dd][Ee][Xx]                                 RETURN_TOKEN(INDEX);
 [Oo][Nn]                                             RETURN_TOKEN(ON);
+[Ii][Nn]                                             RETURN_TOKEN(IN);
+[Nn][Oo][Tt]                                         RETURN_TOKEN(NOT);
+[Ee][Xx][Ii][Ss][Tt]                                 RETURN_TOKEN(EXIST);
+[Jj][Oo][Ii][Nn]                                     RETURN_TOKEN(JOIN);
 [Ss][Hh][Oo][Ww]                                     RETURN_TOKEN(SHOW);
 [Ss][Yy][Nn][Cc]                                     RETURN_TOKEN(SYNC);
 [Ss][Ee][Ll][Ee][Cc][Tt]                             RETURN_TOKEN(SELECT);
@@ -85,7 +89,7 @@ QUOTE            [\'\"]
 ">="                                                 RETURN_TOKEN(GE);
 ">"                                                  RETURN_TOKEN(GT);
 {QUOTE}[0-9]{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01]){QUOTE} yylval->string=strdup(yytext); RETURN_TOKEN(DATE);
-{QUOTE}[\40\42\47A-Za-z0-9_/%\.\-]*{QUOTE}            yylval->string=strdup(yytext); RETURN_TOKEN(SSS);
+{QUOTE}[\40\42\47A-Za-z0-9_/\.\-%][^\'\"]*{QUOTE}            yylval->string=strdup(yytext); RETURN_TOKEN(SSS);
 
 .                                                    printf("Unknown character [%c]\n",yytext[0]); return yytext[0];
 %%
