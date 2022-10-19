@@ -37,6 +37,9 @@ typedef enum {
   GREAT_EQUAL,  //">="    4
   GREAT_THAN,   //">"     5
   LIKE_MATCH,   // like   6
+  NOT_LIKE,     // not like  
+  IN_OP,           // in 
+  NOT_IN_OP,       // not in
   NO_OP
 } CompOp;
 
@@ -66,6 +69,7 @@ typedef struct _Condition {
                        // 1时，操作符右边是属性名，0时，是属性值
   RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value right_value;   // right-hand side value if right_is_attr = FALSE
+  int has_not;         // CompOp前是否有NOT限定词
 } Condition;
 
 // struct of select

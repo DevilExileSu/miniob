@@ -326,6 +326,9 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
     case GREAT_EQUAL: { comp = LESS_THAN; }   break;
     case GREAT_THAN:  { comp = LESS_EQUAL; }  break;
     case LIKE_MATCH:  { comp = LIKE_MATCH; }  break;
+    case NOT_LIKE:    { comp = NOT_LIKE; }    break;
+    case IN_OP:          { comp = IN_OP; }          break;
+    case NOT_IN_OP:      { comp = NOT_IN_OP; }      break;
     default: {
     	LOG_WARN("should not happen");
     }
@@ -388,6 +391,18 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
     right_cell = &value;
     left_inclusive = true;
     right_inclusive = true;
+  } break;
+  case NOT_LIKE: {
+    left_cell = &value;
+    right_cell = &value;
+    left_inclusive = true;
+    right_inclusive = true;
+  } break;
+  case IN_OP: {
+
+  } break;
+  case NOT_IN_OP: {
+
   } break;
   default: {
     LOG_WARN("should not happen. comp=%d", comp);

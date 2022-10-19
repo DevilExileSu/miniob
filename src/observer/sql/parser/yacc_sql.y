@@ -597,6 +597,9 @@ comOp:
     | GE { CONTEXT->comp = GREAT_EQUAL; }
     | NE { CONTEXT->comp = NOT_EQUAL; }
 	| LIKE { CONTEXT->comp = LIKE_MATCH; }
+	| NOT LIKE { CONTEXT->comp = NOT_LIKE; }
+	| IN { CONTEXT->comp = IN_OP; }
+	| NOT IN { CONTEXT->comp = NOT_IN_OP; }
     ;
 
 load_data:
