@@ -694,9 +694,6 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
 }
 
 RC Table::show_index(std::ostream &os) {
-  if (indexes_.empty()) {
-    return RC::GENERIC_ERROR;
-  }
   for (int i=0; i < IDNEX_HEADER_NUM; i++) {
     if (i != 0) {
       os << " | ";
