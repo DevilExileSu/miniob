@@ -1,7 +1,7 @@
 -- echo basic insert
 
 create table t_basic(id int, age int, name char, score float);
-insert into t_basic values(1,1, 'a', 1.0);
+insert into t_basic values('1','1a', 'a', '1.0a');
 insert into t_basic values(2,2, 'b', 2.0);
 insert into t_basic values(4,4, 'c', 3.0);
 insert into t_basic values(3,3, 'd', 4.0);
