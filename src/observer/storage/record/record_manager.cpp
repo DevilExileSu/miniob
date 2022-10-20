@@ -367,7 +367,7 @@ RC RecordFileHandler::init_free_pages()
 }
 
 // TODO(vanish): 如果宕机，并不会记录当前text_file文件中空闲的page，重新启动添加数据，会覆盖旧数据
-// 需要添加一个head page，用于记录当前text_file文件中那么page已被使用
+// 需要添加一个head page，用于记录当前text_file文件中哪些page已被使用
 RC RecordFileHandler::insert_text_data(PageNum &page_num, const char *data) {
   if (text_disk_buffer_pool_ == nullptr) {
     LOG_ERROR("Failed to process TEXTS type data. text_disk_buffer_pool_ is null");

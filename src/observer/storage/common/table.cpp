@@ -180,13 +180,14 @@ RC Table::drop() {
   }
 
   // 4. 删除text数据文件
-  std::string text_data_path = table_text_file(dir, name());
-  bpm.close_file(text_data_path.c_str());
-  if (unlink(text_data_path.c_str()) != 0) {
-    LOG_ERROR("Failed to remove data file = %s, errno = %s", text_data_path.c_str(), errno);
-    return RC::GENERIC_ERROR;
+  if (text_buffer_pool_ != nullptr) {
+    std::string text_data_path = table_text_file(dir, name());
+    bpm.close_file(text_data_path.c_str());
+    if (unlink(text_data_path.c_str()) != 0) {
+      LOG_ERROR("Failed to remove data file = %s, errno = %s", text_data_path.c_str(), errno);
+      return RC::GENERIC_ERROR;
+    }
   }
-
   return RC::SUCCESS;
 }
 

@@ -130,7 +130,7 @@ ParserContext *get_context(yyscan_t scanner)
 %token <number> NUMBER
 %token <floats> FLOAT 
 %token <string> DATE
-// %token <string> TEXT
+%token <string> TEXT
 %token <string> ID
 %token <string> PATH
 %token <string> SSS
