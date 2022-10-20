@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "storage/common/db.h"
 #include "storage/common/table.h"
+#include "util/util.h"
 #include <cmath>
 
 InsertStmt::InsertStmt(Table *table, std::vector<const Value *> &&values, std::vector<int> &&value_amount)
@@ -73,7 +74,7 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
                 break;
               }
               case CHARS: {
-                *(int *)values[i].data = atoi((char *)values[i].data);
+                *(int *)values[i].data = round(atof((char *)values[i].data));
                 values[i].type = INTS;
                 break;
               }
@@ -102,12 +103,12 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
           case CHARS:
             switch (value_type) {
               case INTS: {
-                *(char *)values[i].data = *(int *)values[i].data;
+                values[i].data = const_cast<char *>(int2string(*(int *)values[i].data).c_str());
                 values[i].type = CHARS;
                 break;
               }
               case FLOATS: {
-                *(char *)values[i].data = *(float *)values[i].data;
+                values[i].data = const_cast<char *>(float2string(*(float *)values[i].data).c_str());
                 values[i].type = CHARS;
                 break;
               }

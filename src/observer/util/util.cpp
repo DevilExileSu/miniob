@@ -38,7 +38,7 @@ std::string int2string(int v) {
 
 std::string float2string(float v) {
   char buf[256];
-  snprintf(buf, sizeof(buf), "0.2f", v);
+  snprintf(buf, sizeof(buf), "%.2f", v);
   size_t len = strlen(buf);
   while (buf[len - 1] == '0') {
     len--;

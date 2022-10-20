@@ -18,6 +18,10 @@ See the Mulan PSL v2 for more details. */
 
 std::string double2string(double v);
 
+std::string int2string(int v);
+
+std::string float2string(float v);
+
 int string2int(char *v);
 
 float string2float(char *v);
