@@ -120,7 +120,7 @@ TEST(test_record_page_handler, test_record_file_iterator)
   ASSERT_EQ(rc, RC::SUCCESS);
 
   RecordFileHandler file_handler;
-  rc = file_handler.init(bp);
+  rc = file_handler.init(bp, nullptr);
   ASSERT_EQ(rc, RC::SUCCESS);
 
   RecordFileScanner file_scanner;

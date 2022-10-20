@@ -67,6 +67,8 @@ public:
   RC delete_record(Trx *trx, ConditionFilter *filter, int *deleted_count);
   RC delete_record(Trx *trx, Record *record);
   RC recover_delete_record(Record *record);
+  RC get_text_data(const Record &record, int offset, char *data) const;
+  RC get_text_data(Record *record, const FieldMeta *field_meta, char *data) const;
 
   RC scan_record(Trx *trx, ConditionFilter *filter, int limit, void *context,
       void (*record_reader)(const char *data, void *context));
@@ -101,6 +103,9 @@ private:
   IndexScanner *find_index_for_scan(const ConditionFilter *filter);
   IndexScanner *find_index_for_scan(const DefaultConditionFilter &filter);
   RC insert_record(Trx *trx, Record *record);
+  RC insert_text_data(const char *data);
+  RC delete_text(Record *record, FieldMeta &field_meta);
+  RC update_text(Record *record, const FieldMeta *field_meta, const char *data);
 
 public:
   RC recover_insert_record(Record *record);
@@ -126,6 +131,7 @@ private:
   CLogManager *clog_manager_;
   TableMeta table_meta_;
   DiskBufferPool *data_buffer_pool_ = nullptr;   /// 数据文件关联的buffer pool
+  DiskBufferPool *text_buffer_pool_ =nullptr;    /// text类型数据文件关联的buffer pool
   RecordFileHandler *record_handler_ = nullptr;  /// 记录操作
   std::vector<Index *> indexes_;
 };

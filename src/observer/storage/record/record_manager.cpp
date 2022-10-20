@@ -308,14 +308,20 @@ bool RecordPageHandler::is_full() const
 
 ////////////////////////////////////////////////////////////////////////////////
 
-RC RecordFileHandler::init(DiskBufferPool *buffer_pool)
+RC RecordFileHandler::init(DiskBufferPool *buffer_pool, DiskBufferPool *text_buffer_pool)
 {
   if (disk_buffer_pool_ != nullptr) {
     LOG_ERROR("record file handler has been openned.");
     return RC::RECORD_OPENNED;
   }
 
+  if (text_disk_buffer_pool_ != nullptr) {
+    LOG_ERROR("record file handler has been openned.");
+    return RC::RECORD_OPENNED;
+  }
+
   disk_buffer_pool_ = buffer_pool;
+  text_disk_buffer_pool_ = text_buffer_pool;
 
   RC rc = init_free_pages();
 
@@ -327,6 +333,10 @@ void RecordFileHandler::close()
 {
   if (disk_buffer_pool_ != nullptr) {
     disk_buffer_pool_ = nullptr;
+  }
+  
+  if (text_disk_buffer_pool_ != nullptr) {
+    text_disk_buffer_pool_ = nullptr;
   }
 }
 
@@ -355,6 +365,80 @@ RC RecordFileHandler::init_free_pages()
   }
   return rc;
 }
+
+// TODO(vanish): 如果宕机，并不会记录当前text_file文件中空闲的page，重新启动添加数据，会覆盖旧数据
+// 需要添加一个head page，用于记录当前text_file文件中那么page已被使用
+RC RecordFileHandler::insert_text_data(PageNum &page_num, const char *data) {
+  if (text_disk_buffer_pool_ == nullptr) {
+    LOG_ERROR("Failed to process TEXTS type data. text_disk_buffer_pool_ is null");
+    return RC::GENERIC_ERROR;
+  }
+  RC ret = RC::SUCCESS;
+  // 申请新的页面
+  Frame *frame = nullptr;
+  if ((ret = text_disk_buffer_pool_->allocate_page(&frame)) != RC::SUCCESS) {
+      LOG_ERROR("Failed to allocate page while inserting record. ret:%d", ret);
+      return ret;
+  }
+  page_num = frame->page_num();
+  char *frame_data = frame->data();
+  int len = std::min(strlen(data), TEXT_MAX_SIZE);
+  memcpy(frame_data, data, len);
+
+  frame->data()[len] = 0;
+
+  if ((ret = text_disk_buffer_pool_->flush_page(*frame)) != RC::SUCCESS) {
+    LOG_ERROR("Failed to flush page: %d", page_num);
+    return ret;
+  }
+  text_disk_buffer_pool_->unpin_page(frame);
+  return ret;
+}
+
+RC RecordFileHandler::delete_text_data(PageNum page_num) {
+  if (text_disk_buffer_pool_ == nullptr) {
+    LOG_ERROR("Failed to process TEXTS type data. text_disk_buffer_pool_ is null");
+    return RC::GENERIC_ERROR;
+  }
+
+  return text_disk_buffer_pool_->dispose_page(page_num);
+}
+
+RC RecordFileHandler::update_text_data(PageNum page_num, const char *data) {
+  if (text_disk_buffer_pool_ == nullptr) {
+    LOG_ERROR("Failed to process TEXTS type data. text_disk_buffer_pool_ is null");
+    return RC::GENERIC_ERROR;
+  }
+  RC ret = RC::SUCCESS;
+  Frame *frame;
+  if ((ret = text_disk_buffer_pool_->get_this_page(page_num, &frame)) != RC::SUCCESS) {
+    LOG_ERROR("Failed get text data, page_num=%d", page_num);
+    return ret;
+  }
+
+  int len = std::min(strlen(data), TEXT_MAX_SIZE);
+  memcpy(frame->data(), data, len); 
+  frame->data()[len] = 0;
+  text_disk_buffer_pool_->unpin_page(frame);
+  return ret;
+}
+
+RC RecordFileHandler::get_text_data(PageNum page_num, char *data) {
+  if (text_disk_buffer_pool_ == nullptr) {
+    LOG_ERROR("Failed to process TEXTS type data. text_disk_buffer_pool_ is null");
+    return RC::GENERIC_ERROR;
+  }
+  RC ret = RC::SUCCESS;
+  Frame *frame;
+  if ((ret = text_disk_buffer_pool_->get_this_page(page_num, &frame)) != RC::SUCCESS) {
+    LOG_ERROR("Failed get text data, page_num=%d", page_num);
+    return ret;
+  }
+  memcpy(data, frame->data(), TEXT_MAX_SIZE);
+  text_disk_buffer_pool_->unpin_page(frame);
+  return ret;
+}
+
 
 RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
 {

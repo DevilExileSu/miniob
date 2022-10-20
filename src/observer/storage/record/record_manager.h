@@ -19,6 +19,8 @@ See the Mulan PSL v2 for more details. */
 #include "storage/record/record.h"
 #include "common/lang/bitmap.h"
 
+const static size_t TEXT_MAX_SIZE = 4096;
+
 class ConditionFilter;
 
 struct PageHeader {
@@ -104,7 +106,7 @@ private:
 class RecordFileHandler {
 public:
   RecordFileHandler() = default;
-  RC init(DiskBufferPool *buffer_pool);
+  RC init(DiskBufferPool *buffer_pool, DiskBufferPool *text_buffer_pool);
   void close();
 
   /**
@@ -123,6 +125,18 @@ public:
    */
   RC insert_record(const char *data, int record_size, RID *rid);
   RC recover_insert_record(const char *data, int record_size, RID *rid);
+
+
+  /**
+   * 插入text数据到新的page中
+  */
+  RC insert_text_data(PageNum &page_num, const char *data);
+
+  RC delete_text_data(PageNum page_num);
+
+  RC update_text_data(PageNum page_num, const char *data);
+
+  RC get_text_data(PageNum page_num, char *data);
 
   /**
    * 获取指定文件中标识符为rid的记录内容到rec指向的记录结构中
@@ -147,6 +161,7 @@ private:
   
 private:
   DiskBufferPool *disk_buffer_pool_ = nullptr;
+  DiskBufferPool *text_disk_buffer_pool_ = nullptr;
   std::unordered_set<PageNum>  free_pages_; // 没有填充满的页面集合
 };
 

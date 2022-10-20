@@ -28,6 +28,14 @@ void TupleCell::to_string(std::ostream &os) const
     float v = *(float *)data_;
     os << double2string(v);
   } break;
+  case TEXTS: {
+    for (int i = 0; i < length_; i++) {
+      if (data_[i] == '\0') {
+        break;
+      }
+      os << data_[i];
+    }
+  } break;
   case CHARS: {
     for (int i = 0; i < length_; i++) {
       if (data_[i] == '\0') {
@@ -50,6 +58,7 @@ void TupleCell::to_string(std::ostream &os) const
 
 int TupleCell::compare(const TupleCell &other) const
 {
+  // 对select显示结果排序时可能需要进行修改
   if (this->attr_type_ == other.attr_type_) {
     switch (this->attr_type_) {
     case INTS: return compare_int(this->data_, other.data_);

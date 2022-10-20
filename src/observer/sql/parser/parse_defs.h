@@ -51,6 +51,7 @@ typedef enum
   INTS,
   FLOATS,
   DATES,
+  TEXTS,
 } AttrType;
 
 //属性值

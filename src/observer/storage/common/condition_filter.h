@@ -73,6 +73,7 @@ private:
   ConDesc right_;
   AttrType attr_type_ = UNDEFINED;
   CompOp comp_op_ = NO_OP;
+  Table *table_ = nullptr;
 };
 
 class CompositeConditionFilter : public ConditionFilter {

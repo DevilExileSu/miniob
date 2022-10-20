@@ -116,6 +116,28 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
                 return RC::SCHEMA_FIELD_TYPE_MISMATCH;
             }
             break;
+          case TEXTS:
+            // value_type 不可能时TEXTS类型，所以这里不需要考虑把TEXTS类型转换为其他类型
+            switch (value_type) {
+              case INTS: {
+                *(char *)values[i].data = *(int *)values[i].data;
+                values[i].type = TEXTS;
+                break;
+              }
+              case FLOATS: {
+                *(char *)values[i].data = *(float *)values[i].data;
+                values[i].type = TEXTS;
+                break;
+              }
+              case CHARS: {
+                values[i].type = TEXTS;
+                break;
+              }
+              default:
+                LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_list[i]->type());
+                return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
+            break;
           default:
             LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_list[i]->type());
             return RC::SCHEMA_FIELD_TYPE_MISMATCH;

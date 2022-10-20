@@ -110,6 +110,19 @@ RC Table::create(
     return rc;
   }
 
+ for (int i=0; i < attribute_count; i++) {
+  if (attributes[i].type == AttrType::TEXTS) {
+    // 存在TEXT类型字段，创建text数据文件
+    std::string text_data_file = table_text_file(base_dir, name);
+    rc = bpm.create_file(text_data_file.c_str());
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to create disk buffer pool of text data file. file name=%s", text_data_file.c_str());
+      return rc;
+    }
+    break;
+  } 
+ }
+
   rc = init_record_handler(base_dir);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to create table %s due to init record handler failed.", data_file.c_str());
@@ -129,10 +142,12 @@ RC Table::drop() {
   sync();
 
   const char *dir = base_dir_.c_str();
+  BufferPoolManager &bpm = BufferPoolManager::instance();
 
   // 1. 删除描述表元数据的文件
   // 1.1 获取表元数据文件路径
- std::string table_file_path = table_meta_file(dir, name());
+  std::string table_file_path = table_meta_file(dir, name());
+  bpm.close_file(table_file_path.c_str());
   LOG_INFO("table_file_path = %s", table_file_path.c_str());
   // 1.2 调用remove()删除文件
   if (unlink(table_file_path.c_str()) != 0) {
@@ -143,6 +158,7 @@ RC Table::drop() {
   // 2. 删除数据文件
   // 2.1 获取数据文件路径
   std::string table_data_path = table_data_file(dir, name());
+  bpm.close_file(table_data_path.c_str());
   // 2.2 调用remove()删除文件
   if (unlink(table_data_path.c_str()) != 0) {
     LOG_ERROR("Failed to remove data file = %s, errno = %s", table_data_path.c_str(), errno);
@@ -155,11 +171,20 @@ RC Table::drop() {
     ((BplusTreeIndex*)index)->close();
     // 3.2 获取索引文件路径
     std::string table_index_path = table_index_file(dir, name(), index->index_meta().name()); 
+    bpm.close_file(table_index_path.c_str());
     // 3.3 调用remove()删除文件
     if (unlink(table_index_path.c_str()) != 0) {
       LOG_ERROR("Failed to remove index file = %s, errno = %s", table_index_path.c_str(), errno);
       return RC::GENERIC_ERROR;
     }
+  }
+
+  // 4. 删除text数据文件
+  std::string text_data_path = table_text_file(dir, name());
+  bpm.close_file(text_data_path.c_str());
+  if (unlink(text_data_path.c_str()) != 0) {
+    LOG_ERROR("Failed to remove data file = %s, errno = %s", text_data_path.c_str(), errno);
+    return RC::GENERIC_ERROR;
   }
 
   return RC::SUCCESS;
@@ -356,7 +381,7 @@ RC Table::insert_record(Trx *trx, int value_num, const Value *values)
     LOG_ERROR("Invalid argument. table name: %s, value num=%d, values=%p", name(), value_num, values);
     return RC::INVALID_ARGUMENT;
   }
-
+  
   char *record_data;
   RC rc = make_record(value_num, values, record_data);
   if (rc != RC::SUCCESS) {
@@ -368,6 +393,71 @@ RC Table::insert_record(Trx *trx, int value_num, const Value *values)
   record.set_data(record_data);
   rc = insert_record(trx, &record);
   delete[] record_data;
+  return rc;
+}
+
+
+RC Table::insert_text_data(const char *data) {
+  PageNum page_num;
+  RC rc = RC::SUCCESS;
+  
+  // 1. 对于text类型的字段，调用record_manager申请的新page，将values中的数据拷贝出来拷贝到新page中
+  if ((rc = record_handler_->insert_text_data(page_num, data)) != RC::SUCCESS) {
+    LOG_ERROR("Failed to insert text data.");
+    return rc;
+  }
+  // 2. 修改values中的数据，存储的数据为页号
+  memcpy((void *)data, &page_num, sizeof(int32_t));
+
+  return rc;
+}
+
+RC Table::delete_text(Record *record, FieldMeta &field_meta) {
+  // 1. 根据record和field_meta获取页号
+  PageNum page_num; 
+  memcpy(&page_num, record->data() + field_meta.offset(), sizeof(int32_t));
+  // 2. 调用record_manager清空该页
+  RC rc = record_handler_->delete_text_data(page_num);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to delete text data.");
+    return rc;
+  }
+  return rc;
+}
+
+
+RC Table::update_text(Record *record, const FieldMeta *field_meta, const char *data) {
+  // 1. 根据record和field_meta获取页号
+  PageNum page_num; 
+  memcpy(&page_num, record->data() + field_meta->offset(), sizeof(int32_t));
+  RC rc = record_handler_->update_text_data(page_num, data);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to update text data.");
+    return rc; 
+  }
+  return rc;
+}
+
+
+RC Table::get_text_data(Record *record, const FieldMeta *field_meta, char *data) const {
+  PageNum page_num; 
+  memcpy(&page_num, record->data() + field_meta->offset(), sizeof(int32_t));
+  RC rc = record_handler_->get_text_data(page_num, data);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to get text data.");
+    return rc;
+  }
+  return rc;
+}
+
+RC Table::get_text_data(const Record &record, int offset, char *data) const {
+  PageNum page_num; 
+  memcpy(&page_num, record.data() + offset, sizeof(int32_t));
+  RC rc = record_handler_->get_text_data(page_num, data);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to get text data.");
+    return rc;
+  }
   return rc;
 }
 
@@ -406,7 +496,7 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
   // 复制所有字段的值
   int record_size = table_meta_.record_size();
   char *record = new char[record_size];
-
+  RC rc = RC::SUCCESS;
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
@@ -416,26 +506,47 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
       if (copy_len > data_len) {
         copy_len = data_len + 1;
       }
+    } else if (field->type() == TEXTS) {
+      if ((rc = insert_text_data((const char *)value.data)) != RC::SUCCESS) {
+        return rc;
+      }
+      // TODO(vanish): 默认field->len()为4，其实可以不用做额外处理？
+      copy_len = sizeof(PageNum);
     }
+    // TODO(vanish): NULL类型可能需要修改这里
     memcpy(record + field->offset(), value.data, copy_len);
   }
 
   record_out = record;
-  return RC::SUCCESS;
+  return rc;
 }
 
 RC Table::init_record_handler(const char *base_dir)
 {
   std::string data_file = table_data_file(base_dir, table_meta_.name());
 
+  
+  // 判断text_data_file文件是否存在
   RC rc = BufferPoolManager::instance().open_file(data_file.c_str(), data_buffer_pool_);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to open disk buffer pool for file:%s. rc=%d:%s", data_file.c_str(), rc, strrc(rc));
     return rc;
   }
 
+  std::fstream fs;
+  std::string text_data_file = table_text_file(base_dir, table_meta_.name());
+  fs.open(text_data_file, std::ios_base::in | std::ios_base::binary);
+  if (fs.is_open()) {
+    fs.close();
+    RC rc = BufferPoolManager::instance().open_file(text_data_file.c_str(), text_buffer_pool_);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to open disk buffer pool for file:%s. rc=%d:%s", text_data_file.c_str(), rc, strrc(rc));
+      return rc;
+    }
+  }
+
   record_handler_ = new RecordFileHandler();
-  rc = record_handler_->init(data_buffer_pool_);
+  rc = record_handler_->init(data_buffer_pool_, text_buffer_pool_);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to init record handler. rc=%d:%s", rc, strrc(rc));
     data_buffer_pool_->close_file();
@@ -741,6 +852,7 @@ static RC record_update_adapter(Record *record, void *context)
   return record_updater.update_record(record);
 }
 
+// TODO(vanish): update-select 将const FieldMeta *field_meta改为多个字段值,  const Value *value同理
 RC Table::update_record(Trx *trx, Record *record, const FieldMeta *field_meta, const Value *value) {
   RC rc = delete_entry_of_indexes(record->data(), record->rid(), false);
   if (rc != RC::SUCCESS) {
@@ -750,11 +862,13 @@ RC Table::update_record(Trx *trx, Record *record, const FieldMeta *field_meta, c
 
   char *copy_to = record->data() + field_meta->offset();
 
+  rc = update_text(record, field_meta, (const char *)value->data);
   // 1. 修改record中的数据
+  // 如果是TEXT类型，不需要修改record数据
   if (field_meta->type() == AttrType::CHARS) {
     memcpy(copy_to, value->data, std::min(field_meta->len(), (int)strlen((char *) value->data))+1);
-  } else {
-    memcpy(copy_to, value->data, field_meta->len());
+  } else if (field_meta->type() != AttrType::TEXTS) {
+      memcpy(copy_to, value->data, field_meta->len());
   }
 
 
@@ -857,6 +971,17 @@ RC Table::delete_record(Trx *trx, Record *record)
     return rc;
   } 
   
+  // 在这里调用delete_text
+  const std::vector<FieldMeta> *field_metas = table_meta().field_metas();
+  for (auto field: *field_metas) {
+    if (field.type() == TEXTS) {
+      if (RC::SUCCESS != delete_text(record, field)) {
+        LOG_ERROR("Failed to delete text data. field_name = %s", field.name());
+        return RC::GENERIC_ERROR;
+      }
+    }
+  }
+
   rc = record_handler_->delete_record(&record->rid());
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to delete record (rid=%d.%d). rc=%d:%s",

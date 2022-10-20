@@ -89,6 +89,9 @@ ParserContext *get_context(yyscan_t scanner)
         STRING_T
         FLOAT_T
 		DATE_T
+		TEXT_T
+		NULL_T
+		NULLABLE
         HELP
         EXIT
         DOT //QUOTE
@@ -127,6 +130,7 @@ ParserContext *get_context(yyscan_t scanner)
 %token <number> NUMBER
 %token <floats> FLOAT 
 %token <string> DATE
+// %token <string> TEXT
 %token <string> ID
 %token <string> PATH
 %token <string> SSS
@@ -290,6 +294,7 @@ type:
        | STRING_T { $$=CHARS; }
        | FLOAT_T { $$=FLOATS; }
 	   | DATE_T { $$=DATES; }
+	   | TEXT_T { $$=TEXTS; }
        ;
 ID_get:
 	ID 
@@ -356,7 +361,7 @@ value:
 	}
     |SSS {
 			$1 = substr($1,1,strlen($1)-2);
-  		value_init_string(&CONTEXT->values[CONTEXT->value_length++], $1);
+  			value_init_string(&CONTEXT->values[CONTEXT->value_length++], $1);
 		}
     ;
     

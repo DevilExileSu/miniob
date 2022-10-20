@@ -114,8 +114,15 @@ public:
     FieldExpr *field_expr = (FieldExpr *)spec->expression();
     const FieldMeta *field_meta = field_expr->field().meta();
     cell.set_type(field_meta->type());
-    cell.set_data(this->record_->data() + field_meta->offset());
-    cell.set_length(field_meta->len());
+    if (field_meta->type() == AttrType::TEXTS) {
+      table_->get_text_data(record_, field_meta, (char *)text_data);
+      cell.set_data(text_data);
+      cell.set_length(strlen(text_data));
+    } else {
+      // TODO(vanish): 添加NULL类型时，这里可能需要修改
+      cell.set_data(this->record_->data() + field_meta->offset());
+      cell.set_length(field_meta->len());
+    }
     return RC::SUCCESS;
   }
 
@@ -160,6 +167,7 @@ private:
   Record *record_ = nullptr;
   const Table *table_ = nullptr;
   std::vector<TupleCellSpec *> speces_;
+  char text_data[4097] = {0};
 };
 
 /*

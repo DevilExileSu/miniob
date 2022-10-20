@@ -63,7 +63,7 @@ RC DefaultConditionFilter::init(Table &table, const Condition &condition)
   const TableMeta &table_meta = table.table_meta();
   ConDesc left;
   ConDesc right;
-
+  table_ = &table;
   AttrType type_left = UNDEFINED;
   AttrType type_right = UNDEFINED;
 
@@ -165,6 +165,21 @@ bool DefaultConditionFilter::filter(const Record &rec) const
       int right = *(int *)right_value;
       cmp_result = left - right;
     } break;
+    case TEXTS: {
+      PageNum left = *(PageNum *)left_value;
+      PageNum right = *(PageNum *)right_value;
+      char left_text[4096];
+      char right_text[4096];
+      RC rc = table_->get_text_data(rec, left_.attr_offset, (char *)left_text);
+      if (rc != RC::SUCCESS) {
+        break;
+      } 
+      rc = table_->get_text_data(rec, right_.attr_offset, (char *)right_text);
+      if (rc != RC::SUCCESS) {
+        break;
+      }
+      cmp_result = strcmp(left_value, right_value);
+    }
     default: {
     }
   }

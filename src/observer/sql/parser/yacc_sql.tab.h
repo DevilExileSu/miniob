@@ -39,7 +39,7 @@
 # define YY_YY_YACC_SQL_TAB_H_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
-# define YYDEBUG 0
+# define YYDEBUG 1
 #endif
 #if YYDEBUG
 extern int yydebug;
@@ -77,38 +77,41 @@ extern int yydebug;
     STRING_T = 278,                /* STRING_T  */
     FLOAT_T = 279,                 /* FLOAT_T  */
     DATE_T = 280,                  /* DATE_T  */
-    HELP = 281,                    /* HELP  */
-    EXIT = 282,                    /* EXIT  */
-    DOT = 283,                     /* DOT  */
-    INTO = 284,                    /* INTO  */
-    VALUES = 285,                  /* VALUES  */
-    FROM = 286,                    /* FROM  */
-    WHERE = 287,                   /* WHERE  */
-    AND = 288,                     /* AND  */
-    SET = 289,                     /* SET  */
-    ON = 290,                      /* ON  */
-    IN = 291,                      /* IN  */
-    NOT = 292,                     /* NOT  */
-    EXIST = 293,                   /* EXIST  */
-    JOIN = 294,                    /* JOIN  */
-    LOAD = 295,                    /* LOAD  */
-    DATA = 296,                    /* DATA  */
-    INFILE = 297,                  /* INFILE  */
-    LIKE = 298,                    /* LIKE  */
-    EQ = 299,                      /* EQ  */
-    LT = 300,                      /* LT  */
-    GT = 301,                      /* GT  */
-    LE = 302,                      /* LE  */
-    GE = 303,                      /* GE  */
-    NE = 304,                      /* NE  */
-    NUMBER = 305,                  /* NUMBER  */
-    FLOAT = 306,                   /* FLOAT  */
-    DATE = 307,                    /* DATE  */
-    ID = 308,                      /* ID  */
-    PATH = 309,                    /* PATH  */
-    SSS = 310,                     /* SSS  */
-    STAR = 311,                    /* STAR  */
-    STRING_V = 312                 /* STRING_V  */
+    TEXT_T = 281,                  /* TEXT_T  */
+    NULL_T = 282,                  /* NULL_T  */
+    NULLABLE = 283,                /* NULLABLE  */
+    HELP = 284,                    /* HELP  */
+    EXIT = 285,                    /* EXIT  */
+    DOT = 286,                     /* DOT  */
+    INTO = 287,                    /* INTO  */
+    VALUES = 288,                  /* VALUES  */
+    FROM = 289,                    /* FROM  */
+    WHERE = 290,                   /* WHERE  */
+    AND = 291,                     /* AND  */
+    SET = 292,                     /* SET  */
+    ON = 293,                      /* ON  */
+    IN = 294,                      /* IN  */
+    NOT = 295,                     /* NOT  */
+    EXIST = 296,                   /* EXIST  */
+    JOIN = 297,                    /* JOIN  */
+    LOAD = 298,                    /* LOAD  */
+    DATA = 299,                    /* DATA  */
+    INFILE = 300,                  /* INFILE  */
+    LIKE = 301,                    /* LIKE  */
+    EQ = 302,                      /* EQ  */
+    LT = 303,                      /* LT  */
+    GT = 304,                      /* GT  */
+    LE = 305,                      /* LE  */
+    GE = 306,                      /* GE  */
+    NE = 307,                      /* NE  */
+    NUMBER = 308,                  /* NUMBER  */
+    FLOAT = 309,                   /* FLOAT  */
+    DATE = 310,                    /* DATE  */
+    ID = 311,                      /* ID  */
+    PATH = 312,                    /* PATH  */
+    SSS = 313,                     /* SSS  */
+    STAR = 314,                    /* STAR  */
+    STRING_V = 315                 /* STRING_V  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -117,7 +120,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 117 "yacc_sql.y"
+#line 120 "yacc_sql.y"
 
   struct _Attr *attr;
   struct _Condition *condition1;
@@ -127,7 +130,7 @@ union YYSTYPE
   float floats;
 	char *position;
 
-#line 131 "yacc_sql.tab.h"
+#line 134 "yacc_sql.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

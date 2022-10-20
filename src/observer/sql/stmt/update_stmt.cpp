@@ -11,6 +11,7 @@ See the Mulan PSL v2 for more details. */
 //
 // Created by Wangyunlai on 2022/5/22.
 //
+#include <cmath>
 
 #include "common/log/log.h"
 #include "sql/stmt/update_stmt.h"
@@ -53,15 +54,92 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
     return RC::SCHEMA_FIELD_MISSING;
   }
   // 3. 检查Value类型是否和表属性类型一致
-  const Value *value = &update.value;
+  Value *value = const_cast<Value *>(&update.value);
+
   if (value == nullptr) {
     LOG_WARN("parse error");
     return RC::GENERIC_ERROR;
   }
-  if (field_meta->type() != value->type) {
-      LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d", 
-               table_name, field_meta->name(), field_meta->type(), value->type);
-      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+  const AttrType value_type = value->type;
+  if (field_meta->type() != value_type) {
+    switch (field_meta->type()) {
+      case INTS:
+        switch (value_type) {
+          case FLOATS: {
+            *(int *)value->data = round(*(float *)value->data);
+            value->type = INTS;
+            break;
+          }
+          case CHARS: {
+            *(int *)value->data = atoi((char *)value->data);
+            value->type = INTS;
+            break;
+          }
+          default:
+            LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_meta->type());
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        }
+        break;
+      case FLOATS:
+        switch (value_type) {
+          case INTS: {
+            *(float *)value->data = *(int *)value->data;
+            value->type = FLOATS;
+            break;
+          }
+          case CHARS: {
+            *(float *)value->data = atof((char *)value->data);
+            value->type = FLOATS;
+            break;
+          }
+          default:
+            LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_meta->type());
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        }
+        break;
+      case CHARS:
+        switch (value_type) {
+          case INTS: {
+            *(char *)value->data = *(int *)value->data;
+            value->type = CHARS;
+            break;
+          }
+          case FLOATS: {
+            *(char *)value->data = *(float *)value->data;
+            value->type = CHARS;
+            break;
+          }
+          default:
+            LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_meta->type());
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        }
+        break;
+      case TEXTS:
+        // value_type 不可能时TEXTS类型，所以这里不需要考虑把TEXTS类型转换为其他类型
+        switch (value_type) {
+          case INTS: {
+            *(char *)value->data = *(int *)value->data;
+            value->type = TEXTS;
+            break;
+          }
+          case FLOATS: {
+            *(char *)value->data = *(float *)value->data;
+            value->type = TEXTS;
+            break;
+          }
+          case CHARS: {
+            value->type = TEXTS;
+            break;
+          }
+          default:
+            LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_meta->type());
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        }
+        break;
+      default:
+        LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_meta->type());
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
   }
 
   // 构建 filterstmt 用于传递给 predict operator， 谓词算子

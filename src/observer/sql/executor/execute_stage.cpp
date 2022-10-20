@@ -604,10 +604,6 @@ RC ExecuteStage::do_insert(SQLStageEvent *sql_event)
   InsertStmt *insert_stmt = (InsertStmt *)stmt;
   Table *table = insert_stmt->table();
   std::vector<const Value *> values_list = insert_stmt->values();
-  Value value_0 = values_list[0][0];
-  Value value_1 = values_list[0][1];
-  Value value_2 = values_list[0][2];
-  Value value_3 = values_list[0][3];
   std::vector<int> values_amount_list = insert_stmt->value_amount();
   RC rc = RC::SUCCESS;
 
