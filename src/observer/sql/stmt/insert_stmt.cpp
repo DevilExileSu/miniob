@@ -50,9 +50,9 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
   std::vector<int> value_amount_list;
 
   for (int i = 0; i < inserts.insert_num; i++) {
-    Insert insert = inserts.inserts[i];
-    Value *values = insert.values;
-    int value_num = insert.value_num;
+    Insert *insert = const_cast<Insert *>(&inserts.inserts[i]);
+    Value *values = insert->values;
+    int value_num = insert->value_num;
 
     // check the fields number
     if (field_num != value_num) {
@@ -122,8 +122,8 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
         }
       }
     }
-    values_list.emplace_back(&inserts.inserts[i].values[0]);
-    // values_list.emplace_back(&insert.values[0]);
+    
+    values_list.emplace_back(values);
     value_amount_list.emplace_back(value_num);
   }
 
