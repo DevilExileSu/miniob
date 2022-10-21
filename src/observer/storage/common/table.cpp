@@ -504,6 +504,7 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
     size_t copy_len = field->len();
     if (field->type() == CHARS) {
       const size_t data_len = strlen((const char *)value.data);
+      // 如果data_len > copy_len 防止超过record_size大小导致内存越界
       if (copy_len > data_len) {
         copy_len = data_len + 1;
       }
@@ -512,6 +513,7 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
         return rc;
       }
       // TODO(vanish): 默认field->len()为4，其实可以不用做额外处理？
+      // 字节类型长度默认也是4个字节，所以可以不同担心越界问题
       copy_len = sizeof(PageNum);
     }
     // TODO(vanish): NULL类型可能需要修改这里

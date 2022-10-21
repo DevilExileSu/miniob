@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/stmt/insert_stmt.h"
+#include "sql/parser/parse_defs.h"
 #include "common/log/log.h"
 #include "storage/common/db.h"
 #include "storage/common/table.h"
@@ -69,13 +70,16 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
           case INTS:
             switch (value_type) {
               case FLOATS: {
-                *(int *)values[i].data = round(*(float *)values[i].data);
+                int n = round(*(float *)values[i].data);
+                value_destroy(&values[i]);
+                value_init_integer(&values[i], n);
                 values[i].type = INTS;
                 break;
               }
               case CHARS: {
-                *(int *)values[i].data = round(atof((char *)values[i].data));
-                values[i].type = INTS;
+                int n = round(atof((char *)values[i].data));
+                value_destroy(&values[i]);
+                value_init_integer(&values[i], n);
                 break;
               }
               default:
@@ -86,13 +90,15 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
           case FLOATS:
             switch (value_type) {
               case INTS: {
-                *(float *)values[i].data = *(int *)values[i].data;
-                values[i].type = FLOATS;
+                float f = *(int *)values[i].data;
+                value_destroy(&values[i]);
+                value_init_float(&values[i], f);
                 break;
               }
               case CHARS: {
-                *(float *)values[i].data = atof((char *)values[i].data);
-                values[i].type = FLOATS;
+                float f = atof((char *)values[i].data);
+                value_destroy(&values[i]);
+                value_init_float(&values[i], f);
                 break;
               }
               default:
@@ -103,13 +109,15 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
           case CHARS:
             switch (value_type) {
               case INTS: {
-                values[i].data = const_cast<char *>(int2string(*(int *)values[i].data).c_str());
-                values[i].type = CHARS;
+                std::string s = int2string(*(int *)values[i].data);
+                value_destroy(&values[i]);
+                value_init_string(&values[i], s.c_str());
                 break;
               }
               case FLOATS: {
-                values[i].data = const_cast<char *>(float2string(*(float *)values[i].data).c_str());
-                values[i].type = CHARS;
+                std::string s = float2string(*(float *)values[i].data);
+                value_destroy(&values[i]);
+                value_init_string(&values[i], s.c_str());
                 break;
               }
               default:
@@ -118,15 +126,19 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
             }
             break;
           case TEXTS:
-            // value_type 不可能时TEXTS类型，所以这里不需要考虑把TEXTS类型转换为其他类型
+            // value_type 不可能是TEXTS类型，所以这里不需要考虑把TEXTS类型转换为其他类型
             switch (value_type) {
               case INTS: {
-                *(char *)values[i].data = *(int *)values[i].data;
+                std::string s = int2string(*(int *)values[i].data);
+                value_destroy(&values[i]);
+                value_init_string(&values[i], s.c_str());
                 values[i].type = TEXTS;
                 break;
               }
               case FLOATS: {
-                *(char *)values[i].data = *(float *)values[i].data;
+                std::string s = float2string(*(float *)values[i].data);
+                value_destroy(&values[i]);
+                value_init_string(&values[i], s.c_str());
                 values[i].type = TEXTS;
                 break;
               }

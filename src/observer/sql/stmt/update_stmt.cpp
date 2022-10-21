@@ -14,11 +14,13 @@ See the Mulan PSL v2 for more details. */
 #include <cmath>
 
 #include "common/log/log.h"
+#include "sql/parser/parse_defs.h"
 #include "sql/stmt/update_stmt.h"
 #include "sql/stmt/filter_stmt.h"
 #include "storage/common/field_meta.h"
 #include "storage/common/db.h"
 #include "storage/common/table.h"
+#include "util/util.h"
 
 UpdateStmt::UpdateStmt(Table *table, FilterStmt *filter_stmt, const Value *values, int value_amount, const FieldMeta *field_meta)
   : table_(table), filter_stmt_(filter_stmt), values_(values), value_amount_(value_amount), field_meta_(field_meta)
@@ -66,13 +68,16 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
       case INTS:
         switch (value_type) {
           case FLOATS: {
-            *(int *)value->data = round(*(float *)value->data);
+            int n = round(*(float *)value->data);
+            value_destroy(value);
+            value_init_integer(value, n);
             value->type = INTS;
             break;
           }
           case CHARS: {
-            *(int *)value->data = atoi((char *)value->data);
-            value->type = INTS;
+            int n = round(atof((char *)value->data));
+            value_destroy(value);
+            value_init_integer(value, n);
             break;
           }
           default:
@@ -83,13 +88,15 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
       case FLOATS:
         switch (value_type) {
           case INTS: {
-            *(float *)value->data = *(int *)value->data;
-            value->type = FLOATS;
+            float f = *(int *)value->data;
+            value_destroy(value);
+            value_init_float(value, f);
             break;
           }
           case CHARS: {
-            *(float *)value->data = atof((char *)value->data);
-            value->type = FLOATS;
+            float f = atof((char *)value->data);
+            value_destroy(value);
+            value_init_float(value, f);
             break;
           }
           default:
@@ -100,13 +107,15 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
       case CHARS:
         switch (value_type) {
           case INTS: {
-            *(char *)value->data = *(int *)value->data;
-            value->type = CHARS;
+            std::string s = int2string(*(int *)value->data);
+            value_destroy(value);
+            value_init_string(value, s.c_str());
             break;
           }
           case FLOATS: {
-            *(char *)value->data = *(float *)value->data;
-            value->type = CHARS;
+            std::string s = float2string(*(float *)value->data);
+            value_destroy(value);
+            value_init_string(value, s.c_str());
             break;
           }
           default:
@@ -115,15 +124,19 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
         }
         break;
       case TEXTS:
-        // value_type 不可能时TEXTS类型，所以这里不需要考虑把TEXTS类型转换为其他类型
+        // value_type 不可能是TEXTS类型，所以这里不需要考虑把TEXTS类型转换为其他类型
         switch (value_type) {
           case INTS: {
-            *(char *)value->data = *(int *)value->data;
+            std::string s = int2string(*(int *)value->data);
+            value_destroy(value);
+            value_init_string(value, s.c_str());
             value->type = TEXTS;
             break;
           }
           case FLOATS: {
-            *(char *)value->data = *(float *)value->data;
+            std::string s = float2string(*(float *)value->data);
+            value_destroy(value);
+            value_init_string(value, s.c_str());
             value->type = TEXTS;
             break;
           }
