@@ -131,7 +131,11 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   filter_unit->set_right(right);
 
   // 检查两个类型是否能够比较
-  if (condition_value->type != condition_field->type() && condition_field->type() == AttrType::DATES) {
+  if (condition_value != nullptr 
+      && condition_field != nullptr 
+      && condition_value->type != condition_field->type() 
+      && condition_field->type() == AttrType::DATES) {
+
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
   }
   
