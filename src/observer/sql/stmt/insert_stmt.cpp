@@ -61,7 +61,8 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
       LOG_WARN("schema mismatch. value num=%d, field num in schema=%d", value_num, field_num);
       return RC::SCHEMA_FIELD_MISSING;
     }
-
+    // TODO(Vanish): unique-index: 检查是否满足unique
+    
     // check fields type
     for (int i = 0; i < value_num; i++) {
       const AttrType value_type = values[i].type;

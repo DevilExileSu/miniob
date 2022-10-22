@@ -90,7 +90,8 @@ int value_init_date(Value *value, const char *v) {
     value_init_string(value, v);
     return -1;
   }
-  int *p_date = new int(date);
+  int *p_date = (int *)malloc(sizeof(int));
+  *p_date = date;
   value->data = p_date;
   return 0;
 }

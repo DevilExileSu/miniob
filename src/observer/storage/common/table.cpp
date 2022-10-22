@@ -567,6 +567,19 @@ RC Table::get_record_scanner(RecordFileScanner &scanner)
   return rc;
 }
 
+RC Table::check_unique(Value *values) {
+  for (auto index: indexes_) {
+    const IndexMeta index_meta = index->index_meta();
+    auto fields = index_meta.fields();
+    if (index_meta.unique()) {
+      // TODO(Vanish): 遍历各个字段，判断对应字段是否存在对应值
+      for (auto field: fields) {
+      }
+    }
+  }
+  return RC::SUCCESS;
+}
+
 /**
  * 为了不把Record暴露出去，封装一下
  */

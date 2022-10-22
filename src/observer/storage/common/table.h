@@ -76,7 +76,8 @@ public:
   RC create_index(Trx *trx, const char *index_name, const char *attribute_name[], size_t attr_num, int is_unique);
   RC show_index(std::ostream &os);
   RC get_record_scanner(RecordFileScanner &scanner);
-
+  RC check_unique(Value *values);
+  
   RecordFileHandler *record_handler() const
   {
     return record_handler_;
