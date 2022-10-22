@@ -174,6 +174,28 @@ const IndexMeta *TableMeta::find_index_by_field(const char *field) const
   return nullptr;
 }
 
+const IndexMeta *TableMeta::find_index_by_field(const char *attribute_name[], size_t attr_num) const
+{
+  for (const IndexMeta &index : indexes_) {
+    const std::vector<std::string> fields = index.fields();
+    if (fields.size() != attr_num) {
+      continue;
+    }
+    bool flag = true;
+    // TODO(vanish): Multi-index 暂时只要field在索引列表中就直接返回
+    for (size_t i = 0; i < attr_num; i++) {
+      if (0 != strcmp(fields[i].c_str(), attribute_name[i])) {
+        flag = false;
+        break;
+      }
+    }
+    if (flag) {
+      return &index;
+    }
+  }
+  return nullptr;
+}
+
 const IndexMeta *TableMeta::index(int i) const
 {
   return &indexes_[i];

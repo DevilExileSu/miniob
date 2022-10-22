@@ -20,6 +20,22 @@ BplusTreeIndex::~BplusTreeIndex() noexcept
   close();
 }
 
+RC BplusTreeIndex::create(const char *file_name, const IndexMeta &index_meta, std::vector<const FieldMeta *> &field_metas) {  
+  if (inited_) {
+    LOG_WARN("Failed to create index due to the index has been created before. file_name:%s, index:%s, field:%s",
+        file_name,
+        index_meta.name(),
+        index_meta.field());
+    return RC::RECORD_OPENNED;
+  }
+  Index::init(index_meta, field_metas);
+
+  return RC::SUCCESS;
+}
+RC BplusTreeIndex::open(const char *file_name, const IndexMeta &index_meta, std::vector<const FieldMeta *> &field_metas) {
+  return RC::SUCCESS;
+}
+
 RC BplusTreeIndex::create(const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta)
 {
   if (inited_) {

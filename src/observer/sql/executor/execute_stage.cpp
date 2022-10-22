@@ -531,14 +531,14 @@ RC ExecuteStage::do_create_index(SQLStageEvent *sql_event)
 {
   SessionEvent *session_event = sql_event->session_event();
   Db *db = session_event->session()->get_current_db();
-  const CreateIndex &create_index = sql_event->query()->sstr.create_index;
+  CreateIndex &create_index = sql_event->query()->sstr.create_index;
   Table *table = db->find_table(create_index.relation_name);
   if (nullptr == table) {
     session_event->set_response("FAILURE\n");
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
-  RC rc = table->create_index(nullptr, create_index.index_name, create_index.attribute_name);
+  RC rc = table->create_index(nullptr, create_index.index_name, (const char **)create_index.attribute_name, create_index.attr_num, create_index.is_unique);
   sql_event->session_event()->set_response(rc == RC::SUCCESS ? "SUCCESS\n" : "FAILURE\n");
   return rc;
 }

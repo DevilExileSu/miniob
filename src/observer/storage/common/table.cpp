@@ -147,7 +147,6 @@ RC Table::drop() {
   // 1. 删除描述表元数据的文件
   // 1.1 获取表元数据文件路径
   std::string table_file_path = table_meta_file(dir, name());
-  bpm.close_file(table_file_path.c_str());
   LOG_INFO("table_file_path = %s", table_file_path.c_str());
   // 1.2 调用remove()删除文件
   if (unlink(table_file_path.c_str()) != 0) {
@@ -158,7 +157,6 @@ RC Table::drop() {
   // 2. 删除数据文件
   // 2.1 获取数据文件路径
   std::string table_data_path = table_data_file(dir, name());
-  bpm.close_file(table_data_path.c_str());
   // 2.2 调用remove()删除文件
   if (unlink(table_data_path.c_str()) != 0) {
     LOG_ERROR("Failed to remove data file = %s, errno = %s", table_data_path.c_str(), errno);
@@ -171,7 +169,6 @@ RC Table::drop() {
     ((BplusTreeIndex*)index)->close();
     // 3.2 获取索引文件路径
     std::string table_index_path = table_index_file(dir, name(), index->index_meta().name()); 
-    bpm.close_file(table_index_path.c_str());
     // 3.3 调用remove()删除文件
     if (unlink(table_index_path.c_str()) != 0) {
       LOG_ERROR("Failed to remove index file = %s, errno = %s", table_index_path.c_str(), errno);
@@ -182,7 +179,6 @@ RC Table::drop() {
   // 4. 删除text数据文件
   if (text_buffer_pool_ != nullptr) {
     std::string text_data_path = table_text_file(dir, name());
-    bpm.close_file(text_data_path.c_str());
     if (unlink(text_data_path.c_str()) != 0) {
       LOG_ERROR("Failed to remove data file = %s, errno = %s", text_data_path.c_str(), errno);
       return RC::GENERIC_ERROR;
@@ -715,29 +711,43 @@ static RC insert_index_record_reader_adapter(Record *record, void *context)
 }
 
 // TODO(vanish): Multi-index 修改arribute_name为数组
-RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_name)
+RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_name[], size_t attr_num, int is_unique)
 {
-  if (common::is_blank(index_name) || common::is_blank(attribute_name)) {
-    LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
+  if (common::is_blank(index_name)) {
+    LOG_INFO("Invalid input arguments, table name is %s, index_name is blank", name());
     return RC::INVALID_ARGUMENT;
   }
-  if (table_meta_.index(index_name) != nullptr || table_meta_.find_index_by_field((attribute_name))) {
+  if (table_meta_.index(index_name) != nullptr) {
+    LOG_INFO("Invalid input arguments, table name is %s, index %s exist",
+          name(), index_name);
+  }
+  for (size_t i = 0; i < attr_num; i++) {
+    if (common::is_blank(attribute_name[i])) {
+        LOG_INFO("Invalid input arguments, table name is %s, index_name is blank", name());
+        return RC::INVALID_ARGUMENT;
+    }
+  }
+  // TODO(Vanish): 检查字段是为unique
+  if (table_meta_.index(index_name) != nullptr || table_meta_.find_index_by_field(attribute_name, attr_num)) {
     LOG_INFO("Invalid input arguments, table name is %s, index %s exist or attribute %s exist index",
-             name(), index_name, attribute_name);
+             name(), index_name, attribute_name[0]);
     return RC::SCHEMA_INDEX_EXIST;
   }
 
-  const FieldMeta *field_meta = table_meta_.field(attribute_name);
-  if (!field_meta) {
-    LOG_INFO("Invalid input arguments, there is no field of %s in table:%s.", attribute_name, name());
-    return RC::SCHEMA_FIELD_MISSING;
+  std::vector<std::string> fields;
+  std::vector<const FieldMeta *>  field_metas;
+  for (size_t i=0; i<attr_num; i++) {
+    const FieldMeta *field_meta = table_meta_.field(attribute_name[i]);
+    if (!field_meta) {
+      LOG_INFO("Invalid input arguments, there is no field of %s in table:%s.", attribute_name[i], name());
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+    fields.emplace_back(field_meta->name());
+    field_metas.emplace_back(field_meta);
   }
 
-  std::vector<std::string> fields;
-  fields.emplace_back(field_meta->name());
-
   IndexMeta new_index_meta;
-  RC rc = new_index_meta.init(index_name, std::move(fields));
+  RC rc = new_index_meta.init(index_name, std::move(fields), is_unique);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s, field_name:%s",
              name(), index_name, attribute_name);
@@ -747,7 +757,9 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
   // 创建索引相关数据
   BplusTreeIndex *index = new BplusTreeIndex();
   std::string index_file = table_index_file(base_dir_.c_str(), name(), index_name);
-  rc = index->create(index_file.c_str(), new_index_meta, *field_meta);
+
+  // TODO(Vanish): multi-index 修改create语句，
+  rc = index->create(index_file.c_str(), new_index_meta, *field_metas[0]);
   if (rc != RC::SUCCESS) {
     delete index;
     LOG_ERROR("Failed to create bplus tree index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));

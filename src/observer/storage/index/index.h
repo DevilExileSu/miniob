@@ -53,9 +53,10 @@ public:
 
 protected:
   RC init(const IndexMeta &index_meta, const FieldMeta &field_meta);
-
+  RC init(const IndexMeta &index_meta, std::vector<const FieldMeta *> &field_metas);
 protected:
   IndexMeta index_meta_;
+  std::vector<const FieldMeta *> field_metas_;
   FieldMeta field_meta_;  /// 当前实现仅考虑一个字段的索引
 };
 

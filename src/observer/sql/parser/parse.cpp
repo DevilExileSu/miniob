@@ -209,6 +209,9 @@ void inserts_init(Inserts *inserts, const char *relation_name, Insert insert_lis
 }
 void inserts_destroy(Inserts *inserts)
 {
+  for (size_t i=0; i<inserts->insert_num; i++) {
+    insert_destroy(&inserts->inserts[i]);
+  }
   free(inserts->relation_name);
   inserts->relation_name = nullptr;
 }
@@ -296,23 +299,30 @@ void drop_table_destroy(DropTable *drop_table)
   drop_table->relation_name = nullptr;
 }
 
+void create_index_append_attribute_name(CreateIndex *create_index, const char *attr_name) {
+  create_index->attribute_name[create_index->attr_num] = strdup(attr_name);
+  printf("%s\n", attr_name);
+  ++create_index->attr_num;
+}
+
 void create_index_init(
-    CreateIndex *create_index, const char *index_name, const char *relation_name, const char *attr_name)
+    CreateIndex *create_index, const char *index_name, const char *relation_name, int is_unique)
 {
   create_index->index_name = strdup(index_name);
   create_index->relation_name = strdup(relation_name);
-  create_index->attribute_name = strdup(attr_name);
+  create_index->is_unique = is_unique;
 }
 
 void create_index_destroy(CreateIndex *create_index)
 {
   free(create_index->index_name);
   free(create_index->relation_name);
-  free(create_index->attribute_name);
-
+  for (size_t i = 0; i < create_index->attr_num; i++) {
+    free(create_index->attribute_name[i]);
+  }
   create_index->index_name = nullptr;
   create_index->relation_name = nullptr;
-  create_index->attribute_name = nullptr;
+  create_index->attr_num = 0;
 }
 
 void drop_index_init(DropIndex *drop_index, const char *index_name)

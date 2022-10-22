@@ -16,11 +16,12 @@ typedef struct ParserContext {
   size_t condition_length;
   size_t from_length;
   size_t value_length;
-  
+	
   // 一条insert插入多条数据
   size_t insert_num;
   Insert insert_list[MAX_NUM];
 
+  // size_t 
   Value values[MAX_NUM];
   Condition conditions[MAX_NUM];
   CompOp comp;
@@ -72,6 +73,7 @@ ParserContext *get_context(yyscan_t scanner)
         TABLE
         TABLES
         INDEX
+		UNIQUE
         SELECT
         DESC
         SHOW
@@ -225,13 +227,31 @@ desc_table:
     ;
 
 create_index:		/*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE SEMICOLON 
+    CREATE INDEX ID ON ID LBRACE attr_name attr_name_list RBRACE SEMICOLON 
 		{
 			CONTEXT->ssql->flag = SCF_CREATE_INDEX;//"create_index";
-			create_index_init(&CONTEXT->ssql->sstr.create_index, $3, $5, $7);
+			create_index_init(&CONTEXT->ssql->sstr.create_index, $3, $5, 0);
+			
+		}
+    | CREATE UNIQUE INDEX ID ON ID LBRACE attr_name attr_name_list RBRACE SEMICOLON 
+		{
+			CONTEXT->ssql->flag = SCF_CREATE_INDEX;//"create_index";
+			create_index_init(&CONTEXT->ssql->sstr.create_index, $4, $6, 1);
+			// create_index_append_attribute_name(&CONTEXT->ssql->sstr.create_index, $8);
 		}
     ;
 
+
+attr_name_list:
+	| COMMA attr_name attr_name_list {
+
+	}
+	;
+
+attr_name: ID {
+	create_index_append_attribute_name(&CONTEXT->ssql->sstr.create_index, $1);
+	// create_index_append_attribute_name(&CONTEXT->ssql->sstr.create_index, $2);
+}
 drop_index:			/*drop index 语句的语法解析树*/
     DROP INDEX ID  SEMICOLON 
 		{

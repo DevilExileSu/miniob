@@ -30,7 +30,7 @@ class IndexMeta {
 public:
   IndexMeta() = default;
 
-  RC init(const char *name, std::vector<std::string> &&fields);
+  RC init(const char *name, std::vector<std::string> &&fields, int is_unique);
 
 public:
   const char *name() const;
