@@ -597,7 +597,7 @@ RC Table::check_unique(Value *values, int value_num, const Condition conditions[
           break;
         }
       }
-      // 索引字段中不包含更新的字段
+      // 索引字段
       if (!contain) {
         continue;
       }
@@ -662,7 +662,6 @@ RC Table::check_unique_before_create(const char *attribute_name[], size_t attr_n
   Record record;
   while (scanner.has_next()) {
     rc = scanner.next(record);
-    int record_size = table_meta_.record_size();
     std::string s;
     for (size_t i = 0; i < attr_num; i++) {
       const FieldMeta *field_meta = table_meta_.field(attribute_name[i]);
@@ -841,7 +840,7 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
   }
 
   // TODO(Vanish): 检查字段是否为unique
-  if (RC::SUCCESS != check_unique_before_create(attribute_name, attr_num)) {
+  if (is_unique && RC::SUCCESS != check_unique_before_create(attribute_name, attr_num)) {
     return RC::GENERIC_ERROR;
   }
 

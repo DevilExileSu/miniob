@@ -61,12 +61,8 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
       LOG_WARN("schema mismatch. value num=%d, field num in schema=%d", value_num, field_num);
       return RC::SCHEMA_FIELD_MISSING;
     }
-    // TODO(Vanish): unique-index: 检查是否满足unique
-    RC rc = RC::SUCCESS;
-    if ((rc = table->check_unique(values, value_num, nullptr, 0)) != RC::SUCCESS) {
-      return rc; 
-    }
 
+    bool has_text = false;
     // check fields type
     for (int i = 0; i < value_num; i++) {
       const AttrType value_type = values[i].type;
@@ -131,6 +127,7 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
             }
             break;
           case TEXTS:
+            has_text = true;
             // value_type 不可能是TEXTS类型，所以这里不需要考虑把TEXTS类型转换为其他类型
             switch (value_type) {
               case INTS: {
@@ -165,6 +162,14 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
     
     values_list.emplace_back(values);
     value_amount_list.emplace_back(value_num);
+
+    // TODO(Vanish): unique-index: 检查是否满足unique，如果存在text类型直接跳过
+    RC rc = RC::SUCCESS;
+    if (!has_text) {
+      if ((rc = table->check_unique(values, value_num, nullptr, 0)) != RC::SUCCESS) {
+        return rc; 
+      }
+    }
   }
 
   // everything alright

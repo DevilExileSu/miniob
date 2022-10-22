@@ -62,13 +62,7 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
     LOG_WARN("parse error");
     return RC::GENERIC_ERROR;
   }
-
-  // TODO(Vanish): unique-index: 检查是否满足unique
-  RC rc = RC::SUCCESS;
-  if ((rc = table->check_unique(value, 1, update.conditions, update.condition_num, update.attribute_name)) != RC::SUCCESS) {
-    return rc; 
-  }
-
+  bool has_text = false;
   const AttrType value_type = value->type;
   if (field_meta->type() != value_type) {
     switch (field_meta->type()) {
@@ -131,6 +125,7 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
         }
         break;
       case TEXTS:
+        has_text = true;
         // value_type 不可能是TEXTS类型，所以这里不需要考虑把TEXTS类型转换为其他类型
         switch (value_type) {
           case INTS: {
@@ -159,6 +154,15 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
       default:
         LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_meta->type());
         return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
+  }
+
+  // TODO(Vanish): unique-index: 检查是否满足unique, 如果存在text类型直接跳过
+
+  RC rc = RC::SUCCESS;
+  if (!has_text) {
+    if ((rc = table->check_unique(value, 1, update.conditions, update.condition_num, update.attribute_name)) != RC::SUCCESS) {
+      return rc; 
     }
   }
 
