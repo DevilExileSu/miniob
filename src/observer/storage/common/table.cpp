@@ -584,6 +584,7 @@ RC Table::check_unique(Value *values, int value_num, const Condition conditions[
       return rc;
     }
   }
+
   // TODO(vanish): 完善multi-index后，完全可以通过索引来快速定位重复值
   for (auto index: indexes_) {
     const IndexMeta index_meta = index->index_meta();
@@ -839,11 +840,6 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
     }
   }
 
-  // TODO(Vanish): 检查字段是否为unique
-  if (is_unique && RC::SUCCESS != check_unique_before_create(attribute_name, attr_num)) {
-    return RC::GENERIC_ERROR;
-  }
-
   if (table_meta_.index(index_name) != nullptr || table_meta_.find_index_by_field(attribute_name, attr_num)) {
     LOG_INFO("Invalid input arguments, table name is %s, index %s exist or attribute %s exist index",
              name(), index_name, attribute_name[0]);
@@ -860,6 +856,11 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
     }
     fields.emplace_back(field_meta->name());
     field_metas.emplace_back(field_meta);
+  }
+
+  // 检查字段是否为unique
+  if (is_unique && RC::SUCCESS != check_unique_before_create(attribute_name, attr_num)) {
+    return RC::GENERIC_ERROR;
   }
 
   IndexMeta new_index_meta;
