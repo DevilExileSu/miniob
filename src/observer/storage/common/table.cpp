@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include <limits.h>
 #include <string.h>
 #include <algorithm>
+#include <unordered_set>
 
 #include "common/defs.h"
 #include "storage/common/table.h"
@@ -567,18 +568,116 @@ RC Table::get_record_scanner(RecordFileScanner &scanner)
   return rc;
 }
 
-RC Table::check_unique(Value *values) {
+RC Table::check_unique(Value *values, int value_num, const Condition conditions[], int condition_num, const char *attribute_name) {
+
+  CompositeConditionFilter condition_filter;
+  RC rc = condition_filter.init(*this, conditions, condition_num);
+
+  char *record_data;
+  // value_num < table field_num 表示这是更新操作
+  if (value_num < table_meta_.field_num() - table_meta_.sys_field_num()) {
+    record_data = nullptr;
+  } else {
+    rc = make_record(value_num, values, record_data);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to create a record. rc=%d:%s", rc, strrc(rc));
+      return rc;
+    }
+  }
+  // TODO(vanish): 完善multi-index后，完全可以通过索引来快速定位重复值
   for (auto index: indexes_) {
     const IndexMeta index_meta = index->index_meta();
     auto fields = index_meta.fields();
-    if (index_meta.unique()) {
-      // TODO(Vanish): 遍历各个字段，判断对应字段是否存在对应值
+
+    if (attribute_name != nullptr) {
+      bool contain = false;
       for (auto field: fields) {
+        if (0 == strcmp(field.c_str(), attribute_name)) {
+          contain = true;
+          break;
+        }
+      }
+      // 索引字段中不包含更新的字段
+      if (!contain) {
+        continue;
+      }
+    }
+    
+    if (index_meta.unique()) {
+      RecordFileScanner scanner;
+      rc = scanner.open_scan(*data_buffer_pool_, &condition_filter);
+        if (rc != RC::SUCCESS) {
+        LOG_ERROR("failed to open scanner. rc=%d:%s", rc, strrc(rc));
+        return rc;
+      }
+      Record record;
+      while (scanner.has_next()) {
+        rc = scanner.next(record);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to fetch next record. rc=%d:%s", rc, strrc(rc));
+          return rc;
+        }
+        bool flag = true;
+        // TODO(Vanish): 遍历各个字段，判断对应字段是否存在对应值
+        for (auto field: fields) {
+          const FieldMeta *field_meta = table_meta_.field(field.c_str());
+          size_t offset = field_meta->offset();
+          size_t len = field_meta->len();
+          
+          if (attribute_name != nullptr && strcmp(attribute_name, field.c_str()) == 0) {
+            if (0 == memcmp(record.data() + offset, values->data, len)) {
+              break;
+            }
+          }
+          // 是否需要考虑不同类型之间内存对齐问题？
+          if (record_data != nullptr) {
+            if (0 != memcmp(record.data() + offset, record_data + offset, len)) {
+              flag = false;
+              break;
+            }
+          }
+        }
+        // flag==true 表明有和索引中所有字段都重复的record，返回error
+        if (flag == true) {
+          LOG_ERROR("failed to insert\\update, because of duplicate values. rc=%d:%s", rc, strrc(rc));
+          return RC::GENERIC_ERROR;
+        }
       }
     }
   }
   return RC::SUCCESS;
 }
+
+
+RC Table::check_unique_before_create(const char *attribute_name[], size_t attr_num) {
+
+  RecordFileScanner scanner;
+  RC rc = scanner.open_scan(*data_buffer_pool_, nullptr);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("failed to open scanner. rc=%d:%s", rc, strrc(rc));
+    return rc;
+  }
+
+  std::unordered_set<std::string> check_set;
+  Record record;
+  while (scanner.has_next()) {
+    rc = scanner.next(record);
+    int record_size = table_meta_.record_size();
+    std::string s;
+    for (size_t i = 0; i < attr_num; i++) {
+      const FieldMeta *field_meta = table_meta_.field(attribute_name[i]);
+      int offset = field_meta->offset();
+      s.append(record.data()+offset, field_meta->len());
+    }
+    if (check_set.find(s) != check_set.end()) {
+      LOG_ERROR("failed to create unique index, because of duplicate values. rc=%d:%s", rc, strrc(rc));
+      return RC::GENERIC_ERROR;
+    }
+    check_set.insert(s);
+  }
+  return RC::SUCCESS;
+}
+
 
 /**
  * 为了不把Record暴露出去，封装一下
@@ -740,7 +839,12 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
         return RC::INVALID_ARGUMENT;
     }
   }
-  // TODO(Vanish): 检查字段是为unique
+
+  // TODO(Vanish): 检查字段是否为unique
+  if (RC::SUCCESS != check_unique_before_create(attribute_name, attr_num)) {
+    return RC::GENERIC_ERROR;
+  }
+
   if (table_meta_.index(index_name) != nullptr || table_meta_.find_index_by_field(attribute_name, attr_num)) {
     LOG_INFO("Invalid input arguments, table name is %s, index %s exist or attribute %s exist index",
              name(), index_name, attribute_name[0]);
@@ -1051,7 +1155,9 @@ RC Table::commit_delete(Trx *trx, const RID &rid)
   if (rc != RC::SUCCESS) {
     return rc;
   }
+
   rc = delete_entry_of_indexes(record.data(), record.rid(), false);
+
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to delete indexes of record(rid=%d.%d). rc=%d:%s",
         rid.page_num, rid.slot_num, rc, strrc(rc));  // panic?

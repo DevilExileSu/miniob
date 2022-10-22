@@ -76,8 +76,11 @@ public:
   RC create_index(Trx *trx, const char *index_name, const char *attribute_name[], size_t attr_num, int is_unique);
   RC show_index(std::ostream &os);
   RC get_record_scanner(RecordFileScanner &scanner);
-  RC check_unique(Value *values);
-  
+  // TODO(vanish): 更新检查时暂时只考虑一个字段的更新，后续修改为数组
+  RC check_unique(Value *values, int values_num, const Condition conditions[], int condition_num, const char *attribute_name = nullptr);
+
+  RC check_unique_before_create(const char *attribute_name[], size_t attr_num);
+
   RecordFileHandler *record_handler() const
   {
     return record_handler_;

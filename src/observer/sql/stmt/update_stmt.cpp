@@ -62,6 +62,13 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
     LOG_WARN("parse error");
     return RC::GENERIC_ERROR;
   }
+
+  // TODO(Vanish): unique-index: 检查是否满足unique
+  RC rc = RC::SUCCESS;
+  if ((rc = table->check_unique(value, 1, update.conditions, update.condition_num, update.attribute_name)) != RC::SUCCESS) {
+    return rc; 
+  }
+
   const AttrType value_type = value->type;
   if (field_meta->type() != value_type) {
     switch (field_meta->type()) {
@@ -160,7 +167,7 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
   table_map.insert(std::pair<std::string, Table *>(std::string(table_name), table));
 
   FilterStmt *filter_stmt = nullptr;
-  RC rc = FilterStmt::create(db, table, &table_map, update.conditions, update.condition_num, filter_stmt);
+  rc = FilterStmt::create(db, table, &table_map, update.conditions, update.condition_num, filter_stmt);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
     return rc;

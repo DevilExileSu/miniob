@@ -62,7 +62,11 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
       return RC::SCHEMA_FIELD_MISSING;
     }
     // TODO(Vanish): unique-index: 检查是否满足unique
-    
+    RC rc = RC::SUCCESS;
+    if ((rc = table->check_unique(values, value_num, nullptr, 0)) != RC::SUCCESS) {
+      return rc; 
+    }
+
     // check fields type
     for (int i = 0; i < value_num; i++) {
       const AttrType value_type = values[i].type;
