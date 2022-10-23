@@ -21,4 +21,5 @@ observer.*
 test/case/result_tmp
 CMakeLists.txt
 test
+doc/*
 #*#

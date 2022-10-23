@@ -11,6 +11,7 @@ See the Mulan PSL v2 for more details. */
 //
 // Created by Wangyunlai on 2022/6/6.
 //
+#include <algorithm>
 
 #include "sql/stmt/select_stmt.h"
 #include "sql/stmt/filter_stmt.h"
@@ -62,7 +63,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     tables.push_back(table);
     table_map.insert(std::pair<std::string, Table*>(table_name, table));
   }
-  
+  // 反转tables
+  std::reverse(tables.begin(), tables.end());
   // collect query fields in `select` statement
   std::vector<Field> query_fields;
   for (int i = select_sql.attr_num - 1; i >= 0; i--) {

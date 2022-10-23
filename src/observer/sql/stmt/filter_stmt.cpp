@@ -38,13 +38,13 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
   FilterStmt *tmp_stmt = new FilterStmt();
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
-    rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit);
+    rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit, tmp_stmt);
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;
       LOG_WARN("failed to create filter unit. condition index=%d", i);
       return rc;
     }
-    tmp_stmt->filter_units_.push_back(filter_unit);
+    // tmp_stmt->filter_units_.push_back(filter_unit);
   }
 
   stmt = tmp_stmt;
@@ -80,7 +80,7 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
 }
 
 RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-				  const Condition &condition, FilterUnit *&filter_unit)
+				  const Condition &condition, FilterUnit *&filter_unit, FilterStmt *tmp_stmt)
 {
   RC rc = RC::SUCCESS;
   
@@ -94,15 +94,16 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   Expression *right = nullptr;
   Value *condition_value = nullptr;
   FieldMeta *condition_field = nullptr;
+  Table *left_table = nullptr;
+  Table *right_table = nullptr;
   if (condition.left_is_attr) {
-    Table *table = nullptr;
     const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);  
+    rc = get_table_and_field(db, default_table, tables, condition.left_attr, left_table, field);  
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot find attr");
       return rc;
     }
-    left = new FieldExpr(table, field);
+    left = new FieldExpr(left_table, field);
     condition_field = const_cast<FieldMeta *>(field);
   } else {
     condition_value = const_cast<Value *>(&condition.left_value);
@@ -112,13 +113,13 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   if (condition.right_is_attr) {
     Table *table = nullptr;
     const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);  
+    rc = get_table_and_field(db, default_table, tables, condition.right_attr, right_table, field);  
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot find attr");
       delete left;
       return rc;
     }
-    right = new FieldExpr(table, field);
+    right = new FieldExpr(right_table, field);
     condition_field = const_cast<FieldMeta *>(field);
   } else {
     condition_value = const_cast<Value *>(&condition.right_value);
@@ -138,6 +139,35 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
   }
-  
+
+  auto add_filter_unit = [&](std::string table_name) {
+    auto iter = tmp_stmt->single_filter_units_.find(table_name);
+    if (iter != tmp_stmt->single_filter_units_.end()) {
+        iter->second.emplace_back(filter_unit);
+    } else {
+      std::vector<FilterUnit *> tmp;
+      tmp.emplace_back(filter_unit);
+      tmp_stmt->single_filter_units_.insert(std::make_pair(table_name, tmp));
+    }
+  };
+
+  if (left_table != nullptr && right_table != nullptr) {
+    if (left_table == right_table) {
+      std::string table_name = std::string(left_table->name());
+      add_filter_unit(table_name);
+    } else {
+      tmp_stmt->filter_units_.emplace_back(filter_unit);
+    }
+  } else if (left_table != nullptr) {
+    std::string table_name = std::string(left_table->name());
+    add_filter_unit(table_name);
+  } else if (right_table != nullptr) {
+    std::string table_name = std::string(right_table->name());
+    add_filter_unit(table_name);
+  } else {
+    std::string table_name = std::string(default_table->name());
+    add_filter_unit(table_name);
+  } 
+
   return rc;
 }

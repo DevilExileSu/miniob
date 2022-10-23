@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <memory>
 #include <vector>
+#include <unordered_map>
 
 #include "common/log/log.h"
 #include "sql/parser/parse.h"
@@ -24,6 +25,12 @@ See the Mulan PSL v2 for more details. */
 #include "storage/record/record.h"
 
 class Table;
+
+enum class TupleType {
+  ROW,
+  COMPOSITE,
+  PROJECT,
+};
 
 class TupleCellSpec
 {
@@ -39,7 +46,9 @@ public:
       expression_ = nullptr;
     }
   }
-
+  void set_table_name(const char *table_name) {
+    this->table_name_ = table_name;
+  }
   void set_alias(const char *alias)
   {
     this->alias_ = alias;
@@ -47,6 +56,9 @@ public:
   const char *alias() const
   {
     return alias_;
+  }
+  const char *table_name() const {
+    return table_name_;
   }
 
   Expression *expression() const
@@ -56,6 +68,7 @@ public:
 
 private:
   const char *alias_ = nullptr;
+  const char *table_name_ = nullptr;
   Expression *expression_ = nullptr;
 };
 
@@ -65,6 +78,7 @@ public:
   Tuple() = default;
   virtual ~Tuple() = default;
 
+  virtual TupleType type() const = 0;
   virtual int cell_num() const = 0; 
   virtual RC  cell_at(int index, TupleCell &cell) const = 0;
   virtual RC  find_cell(const Field &field, TupleCell &cell) const = 0;
@@ -88,7 +102,12 @@ public:
   {
     this->record_ = record;
   }
-
+  const char *table_name() {
+    if (table_ == nullptr) {
+      return nullptr;
+    }
+    return table_->name();
+  }
   void set_schema(const Table *table, const std::vector<FieldMeta> *fields)
   {
     table_ = table;
@@ -96,6 +115,10 @@ public:
     for (const FieldMeta &field : *fields) {
       speces_.push_back(new TupleCellSpec(new FieldExpr(table, &field)));
     }
+  }
+
+  TupleType type() const override {
+    return TupleType::ROW;
   }
 
   int cell_num() const override
@@ -170,17 +193,91 @@ private:
   char text_data[4097] = {0};
 };
 
-/*
+
 class CompositeTuple : public Tuple
 {
 public:
-  int cell_num() const override; 
-  RC  cell_at(int index, TupleCell &cell) const = 0;
+  CompositeTuple() = default;
+  virtual ~CompositeTuple()
+  {
+    table2tuple_.clear();
+    speces_.clear();
+  }
+
+  TupleType type() const override {
+    return TupleType::COMPOSITE;
+  }
+
+  int cell_num() const override {
+    return speces_.size();
+  }
+  
+  void clear_tuple() {
+    table2tuple_.clear();
+  }
+
+  // 这样做是为了使children既可以是CrossProductOperator也可以是predicate
+  void set_tuple(Tuple *tuple) {
+    if (tuple->type() == TupleType::ROW) {
+      RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+      const char *table_name = row_tuple->table_name();
+      table2tuple_[std::string(table_name)] = tuple;
+    } else if (tuple->type() == TupleType::COMPOSITE){
+      table2tuple_ = static_cast<CompositeTuple *>(tuple)->table2tuple_; 
+    }
+  }
+
+  void add_tuple(const char* table_name, Tuple *tuple) {
+    assert(tuple->type() == TupleType::ROW);
+    table2tuple_[std::string(table_name)] = tuple;
+  }
+
+  // 在调用ProjectTuple的set_tuple方法时，
+  // 每次获取一个CompositeTuple时，都需要调用该方法
+  void set_speces(std::vector<TupleCellSpec *> &speces) {
+	  speces_ = speces;
+  }
+
+  // 1. 获取index对应的TupleCellSpec, 获取其FieldExpr的Field信息
+  // 2. 调用子tuple的find_cell方法，获取TupleCell结果
+  RC cell_at(int index, TupleCell &cell) const override {
+    if (index < 0 || index >= static_cast<int>(speces_.size())) {
+      LOG_WARN("invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+    TupleCellSpec *spec = speces_[index];
+    FieldExpr *field_expr = (FieldExpr *)spec->expression();
+    Field field = field_expr->field();
+    // 直接调用find_cell方法
+    return find_cell(field, cell);
+  }
+
+  // 1. 通过Field获取对应的表，在通过表获取对应的子Tuple
+  // 2. 调用子tuple的find_cell方法，获取TupleCell结果
+  RC find_cell(const Field &field, TupleCell &cell) const override {
+      // 获取表名
+      auto iter = table2tuple_.find(std::string(field.table_name()));
+      if (iter != table2tuple_.end()) {
+        return iter->second->find_cell(field, cell);
+      }
+      return RC::INVALID_ARGUMENT;
+  }
+
+  RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
+  {
+    if (index < 0 || index >= static_cast<int>(speces_.size())) {
+      LOG_WARN("invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+    spec = speces_[index];
+    return RC::SUCCESS;
+  }
+  
+    
 private:
-  int cell_num_ = 0;
-  std::vector<Tuple *> tuples_;
+  std::unordered_map<std::string, Tuple *> table2tuple_;
+  std::vector<TupleCellSpec *> speces_;
 };
-*/
 
 class ProjectTuple : public Tuple
 {
@@ -196,6 +293,10 @@ public:
 
   void set_tuple(Tuple *tuple)
   {
+    if (tuple->type() == TupleType::COMPOSITE) {
+      CompositeTuple *comp_tuple = static_cast<CompositeTuple *>(tuple);
+      comp_tuple->set_speces(speces_);
+    }
     this->tuple_ = tuple;
   }
 
@@ -203,6 +304,11 @@ public:
   {
     speces_.push_back(spec);
   }
+
+  TupleType type() const override {
+    return TupleType::PROJECT;
+  }
+
   int cell_num() const override
   {
     return speces_.size();

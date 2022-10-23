@@ -33,6 +33,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/delete_operator.h"
 #include "sql/operator/update_operator.h"
 #include "sql/operator/project_operator.h"
+#include "sql/operator/cross_product_operator.h"
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "sql/stmt/update_stmt.h"
@@ -239,7 +240,7 @@ void end_trx_if_need(Session *session, Trx *trx, bool all_right)
   }
 }
 
-void print_tuple_header(std::ostream &os, const ProjectOperator &oper)
+void print_tuple_header(std::ostream &os, const ProjectOperator &oper, bool is_multi_table)
 {
   const int cell_num = oper.tuple_cell_num();
   const TupleCellSpec *cell_spec = nullptr;
@@ -248,7 +249,9 @@ void print_tuple_header(std::ostream &os, const ProjectOperator &oper)
     if (i != 0) {
       os << " | ";
     }
-
+    if (is_multi_table && cell_spec->table_name()) {
+      os << cell_spec->table_name() << ".";
+    }
     if (cell_spec->alias()) {
       os << cell_spec->alias();
     }
@@ -279,9 +282,9 @@ void tuple_to_string(std::ostream &os, const Tuple &tuple)
   }
 }
 
-IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
+IndexScanOperator *try_to_create_index_scan_operator(std::vector<FilterUnit *> &filter_units)
 {
-  const std::vector<FilterUnit *> &filter_units = filter_stmt->filter_units();
+  // const std::vector<FilterUnit *> &filter_units = filter_stmt->filter_units();
   if (filter_units.empty()) {
     return nullptr;
   }
@@ -433,26 +436,62 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   SelectStmt *select_stmt = (SelectStmt *)(sql_event->stmt());
   SessionEvent *session_event = sql_event->session_event();
   RC rc = RC::SUCCESS;
-  if (select_stmt->tables().size() != 1) {
-    LOG_WARN("select more than 1 tables is not supported");
-    rc = RC::UNIMPLENMENT;
-    return rc;
+
+  FilterStmt *filter_stmt = select_stmt->filter_stmt();
+  std::vector<FilterUnit *> single_filter_units;
+  std::vector<Operator *> scan_oper_list;
+  std::vector<PredicateOperator *> pred_oper_list;
+  std::vector<CrossProductOperator *> cross_oper_list;
+
+  for (auto table: select_stmt->tables()) {
+    filter_stmt->single_filter_units(table->name(), single_filter_units);
+
+    Operator *scan_oper = try_to_create_index_scan_operator(single_filter_units);
+    if (nullptr == scan_oper) {
+      scan_oper = new TableScanOperator(table);
+    }
+    PredicateOperator *pred_oper = new PredicateOperator(single_filter_units);
+    pred_oper->add_child(scan_oper);
+    pred_oper_list.push_back(pred_oper);
+    single_filter_units.clear();
   }
 
-  Operator *scan_oper = try_to_create_index_scan_operator(select_stmt->filter_stmt());
-  if (nullptr == scan_oper) {
-    scan_oper = new TableScanOperator(select_stmt->tables()[0]);
+  for (int i=1; i<pred_oper_list.size() ; i++) {
+    CrossProductOperator *cross_oper = new CrossProductOperator(filter_stmt->filter_units());
+    if (i == 1) {
+      cross_oper->add_child(pred_oper_list[0]);
+    } else {
+      cross_oper->add_child(cross_oper_list.back());
+    }
+    cross_oper->add_child(pred_oper_list[i]);
+    cross_oper_list.emplace_back(cross_oper);
   }
 
-  DEFER([&]() { delete scan_oper; });
+  DEFER([&]() { 
+    for (int i=0; i<scan_oper_list.size(); i++) {
+      delete scan_oper_list[i]; 
+    }
+    for (int i=0; i<pred_oper_list.size(); i++) {
+      delete pred_oper_list[i];
+    }
+    for (int i=0; i<cross_oper_list.size(); i++) {
+      delete cross_oper_list[i];
+    }
+  });
 
-  PredicateOperator pred_oper(select_stmt->filter_stmt());
-  pred_oper.add_child(scan_oper);
   ProjectOperator project_oper;
-  project_oper.add_child(&pred_oper);
+  if (!cross_oper_list.empty()) {
+    // 多表
+    project_oper.add_child(cross_oper_list.back());
+  } else {
+    // 单表
+    project_oper.add_child(pred_oper_list[0]);
+  }
+  
   for (const Field &field : select_stmt->query_fields()) {
     project_oper.add_projection(field.table(), field.meta());
   }
+
   rc = project_oper.open();
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to open operator");
@@ -460,7 +499,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   }
 
   std::stringstream ss;
-  print_tuple_header(ss, project_oper);
+  print_tuple_header(ss, project_oper, select_stmt->tables().size() > 1);
   while ((rc = project_oper.next()) == RC::SUCCESS) {
     // get current record
     // write to response
@@ -473,6 +512,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 
     tuple_to_string(ss, *tuple);
     ss << std::endl;
+    printf("%s", ss.str().c_str());
   }
 
   if (rc != RC::RECORD_EOF) {
@@ -658,8 +698,11 @@ RC ExecuteStage::do_update(SQLStageEvent *sql_event)
   }
 
   UpdateStmt *update_stmt = (UpdateStmt *)stmt;
-  TableScanOperator scan_oper(update_stmt->table());
-  PredicateOperator pred_oper(update_stmt->filter_stmt());
+  Table *table = update_stmt->table();
+  TableScanOperator scan_oper(table);
+  std::vector<FilterUnit *> filter_units;
+  update_stmt->filter_stmt()->single_filter_units(table->name(), filter_units);
+  PredicateOperator pred_oper(filter_units);
   pred_oper.add_child(&scan_oper);
   UpdateOperator update_oper(update_stmt, trx);
   update_oper.add_child(&pred_oper);
@@ -704,8 +747,11 @@ RC ExecuteStage::do_delete(SQLStageEvent *sql_event)
   }
 
   DeleteStmt *delete_stmt = (DeleteStmt *)stmt;
-  TableScanOperator scan_oper(delete_stmt->table());
-  PredicateOperator pred_oper(delete_stmt->filter_stmt());
+  Table *table = delete_stmt->table();
+  TableScanOperator scan_oper(table);
+  std::vector<FilterUnit *> filter_units;
+  delete_stmt->filter_stmt()->single_filter_units(table->name(), filter_units);
+  PredicateOperator pred_oper(filter_units);
   pred_oper.add_child(&scan_oper);
   DeleteOperator delete_oper(delete_stmt, trx);
   delete_oper.add_child(&pred_oper);

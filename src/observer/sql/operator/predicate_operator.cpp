@@ -62,11 +62,11 @@ Tuple * PredicateOperator::current_tuple()
 
 bool PredicateOperator::do_predicate(RowTuple &tuple)
 {
-  if (filter_stmt_ == nullptr || filter_stmt_->filter_units().empty()) {
+  if (filter_units_.empty()) {
     return true;
   }
-
-  for (const FilterUnit *filter_unit : filter_stmt_->filter_units()) {
+  
+  for (const FilterUnit *filter_unit : filter_units_) {
     Expression *left_expr = filter_unit->left();
     Expression *right_expr = filter_unit->right();
     CompOp comp = filter_unit->comp();
@@ -77,7 +77,7 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
 
     const int compare = left_cell.compare(right_cell);
     bool filter_result = false;
-    // TODO: 添加like匹配
+
     switch (comp) {
     case EQUAL_TO: {
       filter_result = (0 == compare); 

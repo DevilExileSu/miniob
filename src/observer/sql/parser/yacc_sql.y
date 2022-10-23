@@ -107,6 +107,7 @@ ParserContext *get_context(yyscan_t scanner)
 		IN
 		NOT
 		EXIST
+		INNER
 		JOIN
         LOAD
         DATA
