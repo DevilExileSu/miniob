@@ -65,6 +65,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   }
   // 反转tables
   std::reverse(tables.begin(), tables.end());
+
   // collect query fields in `select` statement
   std::vector<Field> query_fields;
   for (int i = select_sql.attr_num - 1; i >= 0; i--) {
@@ -127,7 +128,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), query_fields.size());
 
   Table *default_table = nullptr;
-  if (tables.size() == 1) {
+  if (!tables.empty()) {
     default_table = tables[0];
   }
 

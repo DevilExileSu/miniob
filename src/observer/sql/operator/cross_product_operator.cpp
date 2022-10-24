@@ -52,8 +52,9 @@ RC CrossProductOperator::next()
   }
 
   // 右表为空
-  if (buffer_tuple_.size() == 0) {
+  if (buffer_tuple_.empty()) {
     rc = RC::INTERNAL;
+    return rc;
   }
 
   CompositeTuple composite_tuple;

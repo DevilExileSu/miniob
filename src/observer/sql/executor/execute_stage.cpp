@@ -512,7 +512,6 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 
     tuple_to_string(ss, *tuple);
     ss << std::endl;
-    printf("%s", ss.str().c_str());
   }
 
   if (rc != RC::RECORD_EOF) {
