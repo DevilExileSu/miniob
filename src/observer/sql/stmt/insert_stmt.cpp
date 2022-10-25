@@ -166,7 +166,7 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
     // TODO(Vanish): unique-index: 检查是否满足unique，如果存在text类型直接跳过
     RC rc = RC::SUCCESS;
     if (!has_text) {
-      if ((rc = table->check_unique(values, value_num, nullptr, 0)) != RC::SUCCESS) {
+      if ((rc = table->check_unique(values, value_num)) != RC::SUCCESS) {
         return rc; 
       }
     }

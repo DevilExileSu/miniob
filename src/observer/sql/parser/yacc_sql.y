@@ -16,14 +16,29 @@ typedef struct ParserContext {
   size_t condition_length;
   size_t from_length;
   size_t value_length;
-	
+  
+  // 属性列表 
+  RelAttr attrs[MAX_NUM];
+  size_t attr_num;
+
   // 一条insert插入多条数据
   size_t insert_num;
   Insert insert_list[MAX_NUM];
 
+  // 作为其他语句子语句的select语句
+  size_t select_num;
+  Selects selections[MAX_NUM];
+  // 为了和主语句区分
+//   size_t select_attr_num[MAX_NUM];
+//   RelAttr select_attrs[MAX_NUM][MAX_NUM];
+//   size_t select_cond_num[MAX_NUM];
+//   Condition conditions[MAX_NUM][MAX_NUM];
+
+
   // size_t 
   Value values[MAX_NUM];
   Condition conditions[MAX_NUM];
+  size_t cursor;
   CompOp comp;
 	char id[MAX_NUM];
 } ParserContext;
@@ -112,6 +127,11 @@ ParserContext *get_context(yyscan_t scanner)
         LOAD
         DATA
         INFILE
+		MAX_T
+		MIN_T
+		COUNT_T
+		AVG_T
+		SUM_T
 		LIKE
         EQ
         LT
@@ -121,7 +141,7 @@ ParserContext *get_context(yyscan_t scanner)
         NE
 
 %union {
-  struct _Attr *attr;
+  struct _Attr *attr1;
   struct _Condition *condition1;
   struct _Value *value1;
   char *string;
@@ -141,9 +161,11 @@ ParserContext *get_context(yyscan_t scanner)
 %token <string> STRING_V
 //非终结符
 
+%type <number> agg_func;
 %type <number> type;
 %type <condition1> condition;
 %type <value1> value;
+%type <attr1> agg;
 %type <number> number;
 
 %%
@@ -156,7 +178,8 @@ commands:		//commands or sqls. parser starts here.
 command:
 	  select  
 	| insert
-	| update
+	// | update
+	| updates
 	| delete
 	| create_table
 	| drop_table
@@ -396,42 +419,88 @@ delete:		/*  delete 语句的语法解析树*/
 			CONTEXT->condition_length = 0;	
     }
     ;
-update:			/*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value where SEMICOLON
-		{
-			CONTEXT->ssql->flag = SCF_UPDATE;//"update";
-			Value *value = &CONTEXT->values[0];
-			updates_init(&CONTEXT->ssql->sstr.update, $2, $4, value, 
-					CONTEXT->conditions, CONTEXT->condition_length);
-			CONTEXT->condition_length = 0;
-		}
-    ;
-select:				/*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list where SEMICOLON
-		{
-			// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
-			selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
+// update:			/*  update 语句的语法解析树*/
+//     UPDATE ID SET ID EQ value where SEMICOLON
+// 		{
+// 			CONTEXT->ssql->flag = SCF_UPDATE;//"update";
+// 			Value *value = &CONTEXT->values[0];
+// 			updates_init(&CONTEXT->ssql->sstr.update, $2, $4, value, 
+// 					CONTEXT->conditions, CONTEXT->condition_length);
+// 			CONTEXT->condition_length = 0;
+// 		}
+//     ;
 
-			selects_append_conditions(&CONTEXT->ssql->sstr.selection, CONTEXT->conditions, CONTEXT->condition_length);
-
-			CONTEXT->ssql->flag=SCF_SELECT;//"select";
-			// CONTEXT->ssql->sstr.selection.attr_num = CONTEXT->select_length;
-
-			//临时变量清零
-			CONTEXT->condition_length=0;
-			CONTEXT->from_length=0;
-			CONTEXT->select_length=0;
-			CONTEXT->value_length = 0;
+updates:
+	UPDATE ID SET modify_expr modify_list where SEMICOLON {
+		CONTEXT->ssql->flag = SCF_UPDATE;//"update";
+		updates_select_init(&CONTEXT->ssql->sstr.updates, $2, CONTEXT->conditions, CONTEXT->condition_length);
+		CONTEXT->condition_length = 0;
+		CONTEXT->select_num = 0;
+		CONTEXT->attr_num = 0;
 	}
-	| SELECT select_attr FROM ID INNER JOIN ID ON condition condition_list join_list where SEMICOLON
-	{
+	; 
+
+modify_list:
+	| COMMA modify_expr modify_list {
+
+	}
+	;
+
+modify_expr: 
+	ID EQ value {
+		updates_append_value(&CONTEXT->ssql->sstr.updates, &CONTEXT->values[CONTEXT->value_length - 1], $1);
+	}
+	| ID EQ LBRACE select_clause RBRACE{
+		Value value;
+		value_init_select(&value, &CONTEXT->selections[CONTEXT->select_num - 1]);
+		updates_append_value(&CONTEXT->ssql->sstr.updates, &value, $1);
+	}
+	| ID EQ agg {
+		Value value;
+		// value_init_agg(&value, &CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]-1]);
+		// CONTEXT->select_attr_num[CONTEXT->select_num]--;
+		value_init_agg(&value, &CONTEXT->attrs[--CONTEXT->attr_num]);
+		updates_append_value(&CONTEXT->ssql->sstr.updates, &value, $1);
+	}
+	;
+
+
+select_clause: 
+	SELECT select_attr FROM ID rel_list where {
 		// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
-		selects_append_relation(&CONTEXT->ssql->sstr.selection, $7);
-		selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
+		selects_append_relation(&CONTEXT->selections[CONTEXT->select_num], $4);
 
-		selects_append_conditions(&CONTEXT->ssql->sstr.selection, CONTEXT->conditions, CONTEXT->condition_length);
+		selects_append_conditions(&CONTEXT->selections[CONTEXT->select_num], CONTEXT->conditions, CONTEXT->condition_length);
+		selects_append_attribute_list(&CONTEXT->selections[CONTEXT->select_num], 
+									  CONTEXT->attrs,
+									  CONTEXT->attr_num);
+									//   CONTEXT->select_attrs[CONTEXT->select_num], 
+									//   CONTEXT->select_attr_num[CONTEXT->select_num]);
 
-		CONTEXT->ssql->flag=SCF_SELECT;//"select";
+		
+
+		// CONTEXT->ssql->sstr.selection.attr_num = CONTEXT->select_length;
+		//临时变量清零
+		CONTEXT->condition_length=0;
+		CONTEXT->from_length=0;
+		CONTEXT->select_length=0;
+		CONTEXT->value_length = 0;
+		CONTEXT->attr_num = 0;
+		// CONTEXT->select_attr_num[CONTEXT->select_num] = 0;
+		++CONTEXT->select_num;
+	}
+	| SELECT select_attr FROM ID INNER JOIN ID ON condition condition_list join_list where {
+		// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
+		selects_append_relation(&CONTEXT->selections[CONTEXT->select_num], $7);
+		selects_append_relation(&CONTEXT->selections[CONTEXT->select_num], $4);
+
+		selects_append_conditions(&CONTEXT->selections[CONTEXT->select_num], CONTEXT->conditions, CONTEXT->condition_length);
+
+		selects_append_attribute_list(&CONTEXT->selections[CONTEXT->select_num], 
+									  CONTEXT->attrs,
+									  CONTEXT->attr_num);
+									//   CONTEXT->select_attrs[CONTEXT->select_num], 
+									//   CONTEXT->select_attr_num[CONTEXT->select_num]);
 		// CONTEXT->ssql->sstr.selection.attr_num = CONTEXT->select_length;
 
 		//临时变量清零
@@ -439,55 +508,127 @@ select:				/*  select 语句的语法解析树*/
 		CONTEXT->from_length=0;
 		CONTEXT->select_length=0;
 		CONTEXT->value_length = 0;
+		CONTEXT->attr_num = 0;
+		// CONTEXT->select_attr_num[CONTEXT->select_num] = 0;
+		++CONTEXT->select_num;
+	}
+	;
+
+select:				/*  select 语句的语法解析树*/
+    select_clause SEMICOLON {
+		// 这里说明select是主语句
+		CONTEXT->ssql->flag=SCF_SELECT;//"select";
+		CONTEXT->ssql->sstr.selection = CONTEXT->selections[CONTEXT->select_num-1];
 	}
 	;
 
 join_list:
 	| INNER JOIN ID ON condition condition_list join_list
 	{
-		selects_append_relation(&CONTEXT->ssql->sstr.selection, $3);
+		selects_append_relation(&CONTEXT->selections[CONTEXT->select_num], $3);
 	}
 	;
+
+agg_func:
+	MAX_T { $$=MAX; }
+	| MIN_T { $$=MIN; }
+	| COUNT_T { $$=COUNT; }
+	| AVG_T { $$=AVG; }
+	| SUM_T { $$=SUM; }
+	;
+
+
+agg:
+ 	agg_func LBRACE STAR RBRACE {
+		RelAttr attr;
+		relation_attr_init_with_agg(&attr, NULL, "*", $1);
+		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
+		CONTEXT->attrs[CONTEXT->attr_num++] = attr;
+	}
+	| agg_func LBRACE ID RBRACE {
+		RelAttr attr;
+		relation_attr_init_with_agg(&attr, NULL, $3, $1);
+		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
+		CONTEXT->attrs[CONTEXT->attr_num++] = attr;
+	}
+	| agg_func LBRACE ID DOT ID RBRACE {
+		RelAttr attr;
+		relation_attr_init_with_agg(&attr, $3, $5, $1);
+		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
+		CONTEXT->attrs[CONTEXT->attr_num++] = attr;
+	}
+	| agg_func LBRACE NUMBER RBRACE {
+		RelAttr attr;
+		relation_attr_init_with_agg_num(&attr, $1, $3);
+		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
+		CONTEXT->attrs[CONTEXT->attr_num++] = attr;
+	}
+	| agg_func LBRACE ID COMMA ID RBRACE {
+		// TODO(Vanish): 错误类型
+		CONTEXT->ssql->flag = SCF_INVALID_DATE;
+		yyresult = 2;
+		goto yyreturn;
+	}
+	| agg_func LBRACE RBRACE {
+		// TODO(Vanish): 错误类型
+		CONTEXT->ssql->flag = SCF_INVALID_DATE;
+		yyresult = 2;
+		goto yyreturn;
+	}
+	;
+
 select_attr:
     STAR attr_list {  
 			RelAttr attr;
 			relation_attr_init(&attr, NULL, "*");
-			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
+			CONTEXT->attrs[CONTEXT->attr_num++] = attr;
 		}
     | ID attr_list {
 			RelAttr attr;
 			relation_attr_init(&attr, NULL, $1);
-			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
+			CONTEXT->attrs[CONTEXT->attr_num++] = attr;
 		}
   	| ID DOT ID attr_list {
 			RelAttr attr;
 			relation_attr_init(&attr, $1, $3);
-			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
+			CONTEXT->attrs[CONTEXT->attr_num++] = attr;
 		}
+	| agg attr_list {
+
+	}
     ;
+
 attr_list:
     /* empty */
     | COMMA ID attr_list {
 			RelAttr attr;
 			relation_attr_init(&attr, NULL, $2);
-			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
+			CONTEXT->attrs[CONTEXT->attr_num++] = attr;
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
     | COMMA ID DOT ID attr_list {
 			RelAttr attr;
 			relation_attr_init(&attr, $2, $4);
-			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
+			CONTEXT->attrs[CONTEXT->attr_num++] = attr;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].attribute_name=$4;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].relation_name=$2;
   	  }
+	| COMMA agg attr_list {
+
+	}
   	;
 
 rel_list:
     /* empty */
     | COMMA ID rel_list {	
-				selects_append_relation(&CONTEXT->ssql->sstr.selection, $2);
-		  }
+		selects_append_relation(&CONTEXT->selections[CONTEXT->select_num], $2);
+	}
     ;
 where:
     /* empty */ 
@@ -645,6 +786,11 @@ condition:
 			// $$->right_attr.relation_name=$5;
 			// $$->right_attr.attribute_name=$7;
     }
+	| comOp LBRACE select_clause RBRACE 
+	{
+		// 表示select 子句
+		// 记录子句上一层的atts_num和condition_length
+	}
     ;
 
 comOp:
@@ -658,6 +804,7 @@ comOp:
 	| NOT LIKE { CONTEXT->comp = NOT_LIKE; }
 	| IN { CONTEXT->comp = IN_OP; }
 	| NOT IN { CONTEXT->comp = NOT_IN_OP; }
+	// | NOT EXIST { CONTEXT->comp = NOT_EXIST_OP; }
     ;
 
 load_data:

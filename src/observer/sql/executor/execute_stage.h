@@ -15,13 +15,19 @@ See the Mulan PSL v2 for more details. */
 #ifndef __OBSERVER_SQL_EXECUTE_STAGE_H__
 #define __OBSERVER_SQL_EXECUTE_STAGE_H__
 
+#include <vector>
+
 #include "common/seda/stage.h"
 #include "sql/parser/parse.h"
+#include "sql/stmt/filter_stmt.h"
+#include "sql/operator/index_scan_operator.h"
 #include "rc.h"
 
 class SQLStageEvent;
 class SessionEvent;
 class SelectStmt;
+
+IndexScanOperator *try_to_create_index_scan_operator(std::vector<FilterUnit *> &filter_units);
 
 class ExecuteStage : public common::Stage {
 public:

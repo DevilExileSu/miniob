@@ -23,10 +23,24 @@ See the Mulan PSL v2 for more details. */
 #define MAX_ERROR_MESSAGE 20
 #define MAX_DATA 50
 
+
+typedef enum {
+  NONE,
+  MAX,
+  MIN,
+  COUNT,
+  AVG,
+  SUM,
+} AggFunc;
+
+
 //属性结构体
-typedef struct {
+typedef struct _Attr {
   char *relation_name;   // relation name (may be NULL) 表名
   char *attribute_name;  // attribute name              属性名
+  AggFunc agg_func; 
+  int is_num;
+  int num;
 } RelAttr;
 
 typedef enum {
@@ -52,6 +66,8 @@ typedef enum
   FLOATS,
   DATES,
   TEXTS,
+  AGGFUNC,
+  SELECTS,
 } AttrType;
 
 //属性值
@@ -112,6 +128,16 @@ typedef struct {
   Condition conditions[MAX_NUM];  // conditions in Where clause
 } Updates;
 
+// struct of updates
+typedef struct {
+  size_t attr_num;
+  Value values[MAX_NUM];
+  char *attribute_names[MAX_NUM];
+  char *relation_name;
+  size_t condition_num;           // Length of conditions in Where clause
+  Condition conditions[MAX_NUM];  // conditions in Where clause
+} Updatess;
+
 typedef struct {
   char *name;     // Attribute name
   AttrType type;  // Type of attribute
@@ -162,6 +188,7 @@ union Queries {
   Inserts insertion;
   Deletes deletion;
   Updates update;
+  Updatess updates;
   CreateTable create_table;
   DropTable drop_table;
   CreateIndex create_index;
@@ -208,12 +235,17 @@ extern "C" {
 
 void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const char *attribute_name);
 void relation_attr_destroy(RelAttr *relation_attr);
+void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, AggFunc agg);
+void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num);
 
 void value_init_integer(Value *value, int v);
 void value_init_float(Value *value, float v);
 void value_init_string(Value *value, const char *v);
 int to_date(const char *v);
 int value_init_date(Value *value, const char *v);
+void value_init_agg(Value *value, RelAttr *v);
+void value_init_select(Value *value, Selects *v);
+
 void value_destroy(Value *value);
 
 void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
@@ -225,6 +257,7 @@ void attr_info_destroy(AttrInfo *attr_info);
 
 void selects_init(Selects *selects, ...);
 void selects_append_attribute(Selects *selects, RelAttr *rel_attr);
+void selects_append_attribute_list(Selects *selects, RelAttr attr_list[], size_t attr_num);
 void selects_append_relation(Selects *selects, const char *relation_name);
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num);
 void selects_destroy(Selects *selects);
@@ -242,6 +275,9 @@ void deletes_destroy(Deletes *deletes);
 void updates_init(Updates *updates, const char *relation_name, const char *attribute_name, Value *value,
     Condition conditions[], size_t condition_num);
 void updates_destroy(Updates *updates);
+void updates_select_init(Updatess *updates, const char *relation_name, Condition conditions[], size_t condition_num);
+void updates_append_value(Updatess *updates, Value *value, const char *attribute_name);
+void updates_select_destroy(Updatess *updates);
 
 void create_table_append_attribute(CreateTable *create_table, AttrInfo *attr_info);
 void create_table_init_name(CreateTable *create_table, const char *relation_name);

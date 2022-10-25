@@ -30,6 +30,8 @@ void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const
     relation_attr->relation_name = nullptr;
   }
   relation_attr->attribute_name = strdup(attribute_name);
+  relation_attr->agg_func = AggFunc::NONE;
+  relation_attr->is_num = 0;
 }
 
 void relation_attr_destroy(RelAttr *relation_attr)
@@ -38,6 +40,26 @@ void relation_attr_destroy(RelAttr *relation_attr)
   free(relation_attr->attribute_name);
   relation_attr->relation_name = nullptr;
   relation_attr->attribute_name = nullptr;
+}
+
+void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name,
+                                  const char *attribute_name, AggFunc agg) 
+{
+  if (relation_name != nullptr) {
+    relation_attr->relation_name = strdup(relation_name);
+  } else {
+    relation_attr->relation_name = nullptr;
+  }
+  relation_attr->attribute_name = strdup(attribute_name);
+  relation_attr->agg_func = agg;
+  relation_attr->is_num = 0;
+}
+void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num) {
+  relation_attr->relation_name = nullptr;
+  relation_attr->attribute_name = nullptr;
+  relation_attr->agg_func = agg;
+  relation_attr->is_num = 1;
+  relation_attr->num = num;
 }
 
 static int8_t day_month[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30 ,31, 30, 31};
@@ -103,6 +125,17 @@ void value_destroy(Value *value)
   value->data = nullptr;
 }
 
+void value_init_agg(Value *value, RelAttr *v) {
+  value->type = AGGFUNC;
+  value->data = malloc(sizeof(RelAttr));
+  memcpy(value->data, v, sizeof(RelAttr));
+}
+void value_init_select(Value *value, Selects *v) {
+  value->type = SELECTS;
+  value->data = malloc(sizeof(Selects));
+  memcpy(value->data, v, sizeof(Selects));
+}
+
 void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
     int right_is_attr, RelAttr *right_attr, Value *right_value)
 {
@@ -155,6 +188,14 @@ void selects_append_attribute(Selects *selects, RelAttr *rel_attr)
 void selects_append_relation(Selects *selects, const char *relation_name)
 {
   selects->relations[selects->relation_num++] = strdup(relation_name);
+}
+
+void selects_append_attribute_list(Selects *selects, RelAttr attr_list[], size_t attr_num) {
+  assert(attr_num <= sizeof(selects->attributes) / sizeof(attr_list[0]));
+  for (size_t i = 0; i < attr_num; i++) {
+    selects->attributes[i] = attr_list[i];
+  }
+  selects->attr_num = attr_num;
 }
 
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num)
@@ -268,6 +309,37 @@ void updates_destroy(Updates *updates)
   }
   updates->condition_num = 0;
 }
+
+void updates_select_init(Updatess *updates, const char *relation_name, Condition conditions[], size_t condition_num) {
+  updates->relation_name = strdup(relation_name);
+  assert(condition_num <= sizeof(updates->conditions) / sizeof(updates->conditions[0]));
+  for (size_t i = 0; i < condition_num; i++) {
+    updates->conditions[i] = conditions[i];
+  }
+  updates->condition_num = condition_num;
+}
+
+void updates_append_value(Updatess *updates, Value *value, const char *attribute_name) {
+  updates->attribute_names[updates->attr_num] = strdup(attribute_name);
+  updates->values[updates->attr_num] = *value;
+  updates->attr_num++;
+}
+
+void updates_select_destroy(Updatess *updates) {
+  free(updates->relation_name);
+  updates->relation_name = nullptr;
+  for (size_t i = 0; i < updates->attr_num; i++) {
+    free(updates->attribute_names[i]);
+    updates->attribute_names[i] = nullptr;
+    value_destroy(&updates->values[i]);
+  }
+  for (size_t i = 0; i < updates->condition_num; i++) {
+    condition_destroy(&updates->conditions[i]);
+  }
+  updates->condition_num = 0;
+  updates->attr_num = 0;
+}
+
 
 void create_table_append_attribute(CreateTable *create_table, AttrInfo *attr_info)
 {
@@ -411,7 +483,7 @@ void query_reset(Query *query)
       deletes_destroy(&query->sstr.deletion);
     } break;
     case SCF_UPDATE: {
-      updates_destroy(&query->sstr.update);
+      updates_select_destroy(&query->sstr.updates);
     } break;
     case SCF_CREATE_TABLE: {
       create_table_destroy(&query->sstr.create_table);

@@ -16,6 +16,11 @@ See the Mulan PSL v2 for more details. */
 
 #include <string>
 
+#include "rc.h"
+#include "sql/parser/parse_defs.h"
+#include "storage/common/field_meta.h"
+
+
 std::string double2string(double v);
 
 std::string int2string(int v);
@@ -29,3 +34,5 @@ float string2float(char *v);
 int check_prefix(char *v);
 
 bool like_match(const char *a, const char *b);
+
+RC convert(const FieldMeta *field_meta, Value *value, bool &has_text);
