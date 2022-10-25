@@ -33,12 +33,12 @@ RC AggregateOperator::next()
         if (tuple == nullptr) {
             return RC::INTERNAL;
         }
-        for (int i=rel_attrs_.size() - 1; i >= 0; i--) {
+        for (int i = 0; i < rel_attrs_.size(); i++) {
             if (rel_attrs_[i].attribute_name == nullptr) {
                 continue;
             }
             TupleCell cell;
-            tuple->find_cell(query_fields_[i], cell);
+            tuple->find_cell(query_fields_[rel_attrs_.size() - i - 1], cell);
             stat_[i].add_tuple(cell);
         }
     }

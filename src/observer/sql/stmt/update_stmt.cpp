@@ -87,7 +87,10 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
       // 1.1 构造SelectStmt
       Selects select = *(Selects *)value->data;
       Stmt *stmt = nullptr;
-      SelectStmt::create(db, select, stmt);
+      rc = SelectStmt::create(db, select, stmt);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
       SelectStmt *select_stmt = static_cast<SelectStmt *>(stmt);
       // 如果字段不止一个
       if (!select_stmt->is_single_field()) {
@@ -151,7 +154,10 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
       if (select_stmt->is_agg()) {
         AggregateOperator agg_oper(select_stmt->rel_attrs(), select_stmt->query_fields());
         agg_oper.add_child(&project_oper);
-        agg_oper.open();
+        rc = agg_oper.open();
+        if (rc != RC::SUCCESS) {
+          return rc;
+        }
         std::stringstream ss;
         while ((rc = agg_oper.next()) == RC::SUCCESS) {
         }
@@ -159,7 +165,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
         agg_oper.to_string(ss);
         if (rc != RC::RECORD_EOF) {
           LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
-          agg_oper.close();
+          rc =  agg_oper.close();
         } else {
           rc = agg_oper.close();
         }
@@ -170,7 +176,10 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
         TupleCell cell;
         std::stringstream ss;
 
-        project_oper.open();
+        rc = project_oper.open();
+        if (rc != RC::SUCCESS) {
+          return rc;
+        }
         while ((rc = project_oper.next()) == RC::SUCCESS) {
           // 返回结果不止一行
           if (tuple != nullptr) {
@@ -182,6 +191,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
           tuple->cell_at(0, cell);
           cell.to_string(ss);
         }
+        rc = project_oper.close();
         value_destroy(value);
         value_init_string(value, ss.str().c_str());
       }
