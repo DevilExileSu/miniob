@@ -647,7 +647,7 @@ RC Table::check_unique(std::vector<const FieldMeta *> field_metas, std::vector<c
       RecordFileScanner scanner;
       std::unordered_set<std::string> unique_set;
       rc = scanner.open_scan(*data_buffer_pool_, &condition_filter);
-        if (rc != RC::SUCCESS) {
+      if (rc != RC::SUCCESS) {
         LOG_ERROR("failed to open scanner. rc=%d:%s", rc, strrc(rc));
         return rc;
       }
@@ -671,7 +671,6 @@ RC Table::check_unique(std::vector<const FieldMeta *> field_metas, std::vector<c
           }
         }
 
-        // 将unique索引字段的对应数据取出来，判断更新后是否会有重复值
         char data[record_size];
         size_t length = 0;
         // 遍历各个字段，判断对应字段是否存在对应值
@@ -680,6 +679,39 @@ RC Table::check_unique(std::vector<const FieldMeta *> field_metas, std::vector<c
           size_t offset = field_meta->offset();
           size_t len = field_meta->len();
           memcpy(data + length, update_data + offset, len);
+          length += len;
+        }
+        std::string str;
+        str.assign(data, length);
+        if (unique_set.find(str) != unique_set.end()) {
+          LOG_ERROR("failed to update, because of duplicate values. rc=%d:%s", rc, strrc(rc));
+          return RC::GENERIC_ERROR;
+        }
+        unique_set.insert(str);
+      }
+
+      scanner.close_scan();
+
+      rc = scanner.open_scan(*data_buffer_pool_, nullptr);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to fetch next record. rc=%d:%s", rc, strrc(rc));
+        return rc;
+      }
+      while (scanner.has_next()) {
+        rc = scanner.next(record);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to fetch next record. rc=%d:%s", rc, strrc(rc));
+          return rc;
+        }
+
+        char data[record_size];
+        size_t length = 0;
+        // 遍历各个字段，判断对应字段是否存在对应值
+        for (auto field: fields) {
+          const FieldMeta *field_meta = table_meta_.field(field.c_str());
+          size_t offset = field_meta->offset();
+          size_t len = field_meta->len();
+          memcpy(data + length, record.data() + offset, len);
           length += len;
         }
         std::string str;
