@@ -167,23 +167,21 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
         value_init_string(value, ss.str().c_str());
       } else {
         Tuple *tuple = nullptr;
+        TupleCell cell;
+        std::stringstream ss;
+
         project_oper.open();
         while ((rc = project_oper.next()) == RC::SUCCESS) {
           // 返回结果不止一行
           if (tuple != nullptr) {
             rc = RC::INTERNAL;
           }
+          // 这里返回的是project_oper的成员属性，地址不变
           tuple = project_oper.current_tuple();
-          if (nullptr == tuple) {
-            rc = RC::INTERNAL;
-            break;
-          }
+          // 只有一个字段
+          tuple->cell_at(0, cell);
+          cell.to_string(ss);
         }
-        TupleCell cell;
-        // 只有一个字段
-        std::stringstream ss;
-        tuple->cell_at(0, cell);
-        cell.to_string(ss);
         value_destroy(value);
         value_init_string(value, ss.str().c_str());
       }

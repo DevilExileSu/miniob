@@ -33,7 +33,7 @@ RC AggregateOperator::next()
         if (tuple == nullptr) {
             return RC::INTERNAL;
         }
-        for (int i=0; i<rel_attrs_.size(); i++) {
+        for (int i=rel_attrs_.size() - 1; i >= 0; i--) {
             if (rel_attrs_[i].attribute_name == nullptr) {
                 continue;
             }

@@ -175,7 +175,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     return rc;
   }
 
-  std::reverse(rel_attrs.begin(), rel_attrs.end());
+  // std::reverse(rel_attrs.begin(), rel_attrs.end());
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->tables_.swap(tables);
