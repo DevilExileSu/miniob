@@ -27,24 +27,22 @@ public:
 
   UpdateStmt() = default;
   ~UpdateStmt() override;
-  UpdateStmt(Table *table, FilterStmt *filter_stmt, const Value *values, int value_amount, const FieldMeta *field_meta);
+  UpdateStmt(Table *table, FilterStmt *filter_stmt, std::vector<const Value *> &&values, std::vector<const FieldMeta *> &&field_meta);
   StmtType type() const override { return StmtType::UPDATE; }
 
 public:
-  static RC create(Db *db, const Updates &update_sql, Stmt *&stmt);
+  static RC create(Db *db, const Updatess &update_sql, Stmt *&stmt);
 
 public:
   Table *table() const {return table_;}
-  const Value *values() const { return values_; }
-  int value_amount() const { return value_amount_; }
+  std::vector<const Value *> values() const { return values_; }
   FilterStmt *filter_stmt() const { return filter_stmt_; }
-  const FieldMeta *field_meta() const { return field_meta_; }
+  std::vector<const FieldMeta *> field_meta() const { return field_meta_; }
 
 private:
   Table *table_ = nullptr;
   FilterStmt *filter_stmt_ = nullptr;
-  const Value *values_ = nullptr;
-  int value_amount_ = 0;
-  const FieldMeta *field_meta_ = nullptr;
+  std::vector<const Value *> values_;
+  std::vector<const FieldMeta *> field_meta_;
 };
 

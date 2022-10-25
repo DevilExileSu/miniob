@@ -63,7 +63,9 @@ public:
   RC insert_record(Trx *trx, int value_num, const Value *values);
   RC update_record(Trx *trx, const char *attribute_name, const Value *value, int condition_num,
       const Condition conditions[], int *updated_count);
+  RC update_record(Trx *trx, Record *record, std::vector<const FieldMeta *> field_metas, std::vector<const Value *> values);
   RC update_record(Trx *trx, Record *record, const FieldMeta *field_meta, const Value *value);
+
   RC delete_record(Trx *trx, ConditionFilter *filter, int *deleted_count);
   RC delete_record(Trx *trx, Record *record);
   RC recover_delete_record(Record *record);
@@ -77,7 +79,8 @@ public:
   RC show_index(std::ostream &os);
   RC get_record_scanner(RecordFileScanner &scanner);
   // TODO(vanish): 更新检查时暂时只考虑一个字段的更新，后续修改为数组
-  RC check_unique(Value *values, int values_num, const Condition conditions[], int condition_num, const char *attribute_name = nullptr);
+  RC check_unique(Value *values, int values_num);
+  RC check_unique(std::vector<const FieldMeta *> field_metas, std::vector<const Value *> values, const Condition conditions[], int condition_num);
 
   RC check_unique_before_create(const char *attribute_name[], size_t attr_num);
 

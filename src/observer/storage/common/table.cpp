@@ -568,15 +568,13 @@ RC Table::get_record_scanner(RecordFileScanner &scanner)
   return rc;
 }
 
-RC Table::check_unique(Value *values, int value_num, const Condition conditions[], int condition_num, const char *attribute_name) {
-
-  CompositeConditionFilter condition_filter;
-  RC rc = condition_filter.init(*this, conditions, condition_num);
-
+RC Table::check_unique(Value *values, int value_num) {
   char *record_data;
+  RC rc = RC::SUCCESS;
   // value_num < table field_num 表示这是更新操作
   if (value_num < table_meta_.field_num() - table_meta_.sys_field_num()) {
     record_data = nullptr;
+    return RC::GENERIC_ERROR;
   } else {
     rc = make_record(value_num, values, record_data);
     if (rc != RC::SUCCESS) {
@@ -590,23 +588,9 @@ RC Table::check_unique(Value *values, int value_num, const Condition conditions[
     const IndexMeta index_meta = index->index_meta();
     auto fields = index_meta.fields();
 
-    if (attribute_name != nullptr) {
-      bool contain = false;
-      for (auto field: fields) {
-        if (0 == strcmp(field.c_str(), attribute_name)) {
-          contain = true;
-          break;
-        }
-      }
-      // 索引字段
-      if (!contain) {
-        continue;
-      }
-    }
-    
     if (index_meta.unique()) {
       RecordFileScanner scanner;
-      rc = scanner.open_scan(*data_buffer_pool_, &condition_filter);
+      rc = scanner.open_scan(*data_buffer_pool_, nullptr);
         if (rc != RC::SUCCESS) {
         LOG_ERROR("failed to open scanner. rc=%d:%s", rc, strrc(rc));
         return rc;
@@ -619,17 +603,13 @@ RC Table::check_unique(Value *values, int value_num, const Condition conditions[
           return rc;
         }
         bool flag = true;
-        // TODO(Vanish): 遍历各个字段，判断对应字段是否存在对应值
+        // 遍历各个字段，判断对应字段是否存在对应值
+        // 因为插入时所有字段的数据都有
         for (auto field: fields) {
           const FieldMeta *field_meta = table_meta_.field(field.c_str());
           size_t offset = field_meta->offset();
           size_t len = field_meta->len();
           
-          if (attribute_name != nullptr && strcmp(attribute_name, field.c_str()) == 0) {
-            if (0 == memcmp(record.data() + offset, values->data, len)) {
-              break;
-            }
-          }
           // 是否需要考虑不同类型之间内存对齐问题？
           if (record_data != nullptr) {
             if (0 != memcmp(record.data() + offset, record_data + offset, len)) {
@@ -646,9 +626,74 @@ RC Table::check_unique(Value *values, int value_num, const Condition conditions[
       }
     }
   }
-  return RC::SUCCESS;
+  return rc;
 }
 
+
+RC Table::check_unique(std::vector<const FieldMeta *> field_metas, std::vector<const Value *> values, const Condition conditions[], int condition_num) {
+
+  // 满足条件的行会被update
+  // 找到可能会被修改的行
+  CompositeConditionFilter condition_filter;
+  RC rc = condition_filter.init(*this, conditions, condition_num);
+  int record_size = table_meta_.record_size();
+
+  
+  for (auto index: indexes_) {
+    const IndexMeta index_meta = index->index_meta();
+    auto fields = index_meta.fields();
+
+    if (index_meta.unique()) {
+      RecordFileScanner scanner;
+      std::unordered_set<std::string> unique_set;
+      rc = scanner.open_scan(*data_buffer_pool_, &condition_filter);
+        if (rc != RC::SUCCESS) {
+        LOG_ERROR("failed to open scanner. rc=%d:%s", rc, strrc(rc));
+        return rc;
+      }
+      Record record;
+      while (scanner.has_next()) {
+        rc = scanner.next(record);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to fetch next record. rc=%d:%s", rc, strrc(rc));
+          return rc;
+        }
+        // 不能直接使用record.data()，需要拷贝一下
+        char update_data[record_size];
+        memcpy(update_data, record.data(), record_size);
+        // 将临时record更新为更新后的值
+        for (int i=0; i<values.size(); i++) {
+          char *copy_to = update_data + field_metas[i]->offset();
+          if (field_metas[i]->type() == AttrType::CHARS) {
+            memcpy(copy_to, values[i]->data, std::min(field_metas[i]->len(), (int)strlen((char *) values[i]->data))+1);
+          } else {
+            memcpy(copy_to, values[i]->data, field_metas[i]->len());
+          }
+        }
+
+        // 将unique索引字段的对应数据取出来，判断更新后是否会有重复值
+        char data[record_size];
+        size_t length = 0;
+        // 遍历各个字段，判断对应字段是否存在对应值
+        for (auto field: fields) {
+          const FieldMeta *field_meta = table_meta_.field(field.c_str());
+          size_t offset = field_meta->offset();
+          size_t len = field_meta->len();
+          memcpy(data + length, update_data + offset, len);
+          length += len;
+        }
+        std::string str;
+        str.assign(data, length);
+        if (unique_set.find(str) != unique_set.end()) {
+          LOG_ERROR("failed to update, because of duplicate values. rc=%d:%s", rc, strrc(rc));
+          return RC::GENERIC_ERROR;
+        }
+        unique_set.insert(str);
+      }
+    }
+  }
+  return RC::SUCCESS;
+}
 
 RC Table::check_unique_before_create(const char *attribute_name[], size_t attr_num) {
 
@@ -984,17 +1029,20 @@ static RC record_update_adapter(Record *record, void *context)
   return record_updater.update_record(record);
 }
 
-// TODO(vanish): update-select 将const FieldMeta *field_meta改为多个字段值,  const Value *value同理
 RC Table::update_record(Trx *trx, Record *record, const FieldMeta *field_meta, const Value *value) {
   RC rc = delete_entry_of_indexes(record->data(), record->rid(), false);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to delete indexes of record (rid=%d.%d). rc=%d:%s",
               record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
   }
+  if (field_meta->type() == AttrType::TEXTS) {
+    rc = update_text(record, field_meta, (const char *)value->data);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
 
   char *copy_to = record->data() + field_meta->offset();
-
-  rc = update_text(record, field_meta, (const char *)value->data);
   // 1. 修改record中的数据
   // 如果是TEXT类型，不需要修改record数据
   if (field_meta->type() == AttrType::CHARS) {
@@ -1003,6 +1051,48 @@ RC Table::update_record(Trx *trx, Record *record, const FieldMeta *field_meta, c
       memcpy(copy_to, value->data, field_meta->len());
   }
 
+  rc = record_handler_->update_record(record);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to update record of record (rid=%d.%d). rc=%d:%s", 
+              record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
+    return rc;
+  }
+  rc = insert_entry_of_indexes(record->data(), record->rid());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to insert indexes of record (rid=%d.%d). rc=%d:%s",
+              record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
+
+    return rc;
+  }
+  // 2. 将record写回page中
+  return rc;
+}
+
+
+// TODO(vanish): update-select 将const FieldMeta *field_meta改为多个字段值,  const Value *value同理
+RC Table::update_record(Trx *trx, Record *record, std::vector<const FieldMeta *> field_metas, std::vector<const Value *> values) {
+  RC rc = delete_entry_of_indexes(record->data(), record->rid(), false);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to delete indexes of record (rid=%d.%d). rc=%d:%s",
+              record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
+  }
+  
+  // 1. 修改record中的数据
+  // 如果是TEXT类型，不需要修改record数据
+    for (int i=0; i<values.size(); i++) {
+      if (field_metas[i]->type() == AttrType::TEXTS) {
+        rc = update_text(record, field_metas[i], (const char *)values[i]->data);
+        if (rc != RC::SUCCESS) {
+          return rc;
+        }
+      }
+      char *copy_to = record->data() + field_metas[i]->offset();
+      if (field_metas[i]->type() == AttrType::CHARS) {
+        memcpy(copy_to, values[i]->data, std::min(field_metas[i]->len(), (int)strlen((char *) values[i]->data))+1);
+      } else if (field_metas[i]->type() != AttrType::TEXTS) {
+        memcpy(copy_to, values[i]->data, field_metas[i]->len());
+      }
+    }
 
   rc = record_handler_->update_record(record);
   if (rc != RC::SUCCESS) {

@@ -435,6 +435,8 @@ updates:
 		CONTEXT->ssql->flag = SCF_UPDATE;//"update";
 		updates_select_init(&CONTEXT->ssql->sstr.updates, $2, CONTEXT->conditions, CONTEXT->condition_length);
 		CONTEXT->condition_length = 0;
+		CONTEXT->select_num = 0;
+		CONTEXT->attr_num = 0;
 	}
 	; 
 
@@ -450,7 +452,7 @@ modify_expr:
 	}
 	| ID EQ LBRACE select_clause RBRACE{
 		Value value;
-		value_init_select(&value, &CONTEXT->ssql->sstr.selection);
+		value_init_select(&value, &CONTEXT->selections[CONTEXT->select_num - 1]);
 		updates_append_value(&CONTEXT->ssql->sstr.updates, &value, $1);
 	}
 	| ID EQ agg {
@@ -529,7 +531,7 @@ join_list:
 
 agg_func:
 	MAX_T { $$=MAX; }
-	| MIN_T { $$=SUM; }
+	| MIN_T { $$=MIN; }
 	| COUNT_T { $$=COUNT; }
 	| AVG_T { $$=AVG; }
 	| SUM_T { $$=SUM; }
@@ -561,6 +563,18 @@ agg:
 		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
 		CONTEXT->attrs[CONTEXT->attr_num++] = attr;
 	}
+	| agg_func LBRACE ID COMMA ID RBRACE {
+		// TODO(Vanish): 错误类型
+		CONTEXT->ssql->flag = SCF_INVALID_DATE;
+		yyresult = 2;
+		goto yyreturn;
+	}
+	| agg_func LBRACE RBRACE {
+		// TODO(Vanish): 错误类型
+		CONTEXT->ssql->flag = SCF_INVALID_DATE;
+		yyresult = 2;
+		goto yyreturn;
+	}
 	;
 
 select_attr:
@@ -582,7 +596,7 @@ select_attr:
 			// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
 			CONTEXT->attrs[CONTEXT->attr_num++] = attr;
 		}
-	| agg {
+	| agg attr_list {
 
 	}
     ;
@@ -772,6 +786,11 @@ condition:
 			// $$->right_attr.relation_name=$5;
 			// $$->right_attr.attribute_name=$7;
     }
+	| comOp LBRACE select_clause RBRACE 
+	{
+		// 表示select 子句
+		// 记录子句上一层的atts_num和condition_length
+	}
     ;
 
 comOp:

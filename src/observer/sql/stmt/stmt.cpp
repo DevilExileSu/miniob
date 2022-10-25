@@ -35,7 +35,7 @@ RC Stmt::create_stmt(Db *db, const Query &query, Stmt *&stmt)
     return SelectStmt::create(db, query.sstr.selection, stmt);
   }
   case SCF_UPDATE: {
-    return UpdateStmt::create(db, query.sstr.update, stmt);
+    return UpdateStmt::create(db, query.sstr.updates, stmt);
   }
   default: {
       LOG_WARN("unknown query command");

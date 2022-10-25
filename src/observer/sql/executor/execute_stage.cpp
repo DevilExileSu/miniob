@@ -34,6 +34,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/update_operator.h"
 #include "sql/operator/project_operator.h"
 #include "sql/operator/cross_product_operator.h"
+#include "sql/operator/aggregate_operator.h"
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "sql/stmt/update_stmt.h"
@@ -490,6 +491,26 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   
   for (const Field &field : select_stmt->query_fields()) {
     project_oper.add_projection(field.table(), field.meta());
+  }
+  
+  if (select_stmt->is_agg()) {
+    AggregateOperator agg_oper(select_stmt->rel_attrs(), select_stmt->query_fields());
+    agg_oper.add_child(&project_oper);
+    agg_oper.open();
+    std::stringstream ss;
+    while ((rc = agg_oper.next()) == RC::SUCCESS) {
+    }
+    agg_oper.print_header(ss);
+    agg_oper.to_string(ss);
+    ss << std::endl;
+    if (rc != RC::RECORD_EOF) {
+      LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
+      agg_oper.close();
+    } else {
+      rc = agg_oper.close();
+    }
+    session_event->set_response(ss.str());
+    return rc;
   }
 
   rc = project_oper.open();

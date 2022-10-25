@@ -97,3 +97,7 @@ FAILURE
 SELECT min(num),max(num),avg(num) FROM aggregation_func;
 MIN(NUM) | MAX(NUM) | AVG(NUM)
 12 | 18 | 15
+
+
+
+SELECT id, num, price FROM aggregation_func;

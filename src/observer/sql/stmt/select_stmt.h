@@ -39,11 +39,14 @@ public:
 public:
   const std::vector<Table *> &tables() const { return tables_; }
   const std::vector<Field> &query_fields() const { return query_fields_; }
+  std::vector<RelAttr> &rel_attrs() { return rel_attrs_; }
   FilterStmt *filter_stmt() const { return filter_stmt_; }
-
+  bool is_agg() { return !rel_attrs_.empty(); }
+  bool is_single_field(){ return query_fields_.size() == 1; }
 private:
   std::vector<Field> query_fields_;
   std::vector<Table *> tables_;
+  std::vector<RelAttr> rel_attrs_;
   FilterStmt *filter_stmt_ = nullptr;
 };
 

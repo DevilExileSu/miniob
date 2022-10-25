@@ -483,7 +483,6 @@ void query_reset(Query *query)
       deletes_destroy(&query->sstr.deletion);
     } break;
     case SCF_UPDATE: {
-      updates_destroy(&query->sstr.update);
       updates_select_destroy(&query->sstr.updates);
     } break;
     case SCF_CREATE_TABLE: {

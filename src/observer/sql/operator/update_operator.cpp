@@ -28,11 +28,13 @@ RC UpdateOperator::open()
     }
     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
     Record &record = row_tuple->record();
+
     rc = table->update_record(trx_, &record, update_stmt_->field_meta(), update_stmt_->values());
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to update record: %s", strrc(rc));
       return rc;
     }
+
   }
   return RC::SUCCESS;
 }
