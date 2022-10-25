@@ -99,5 +99,4 @@ MIN(NUM) | MAX(NUM) | AVG(NUM)
 12 | 18 | 15
 
 
-
-SELECT id, num, price FROM aggregation_func;
+SELECT max(birthday) FROM aggregation_func;

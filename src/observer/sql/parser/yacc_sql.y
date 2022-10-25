@@ -563,14 +563,19 @@ agg:
 		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
 		CONTEXT->attrs[CONTEXT->attr_num++] = attr;
 	}
+	| agg_func LBRACE STAR COMMA ID RBRACE {
+		CONTEXT->ssql->flag = SCF_INVALID_DATE;
+		yyresult = 2;
+		goto yyreturn;
+	}
 	| agg_func LBRACE ID COMMA ID RBRACE {
-		// TODO(Vanish): 错误类型
+		// 错误类型
 		CONTEXT->ssql->flag = SCF_INVALID_DATE;
 		yyresult = 2;
 		goto yyreturn;
 	}
 	| agg_func LBRACE RBRACE {
-		// TODO(Vanish): 错误类型
+		// 错误类型
 		CONTEXT->ssql->flag = SCF_INVALID_DATE;
 		yyresult = 2;
 		goto yyreturn;

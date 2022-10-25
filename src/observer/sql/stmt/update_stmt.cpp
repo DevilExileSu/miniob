@@ -167,6 +167,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
         value_init_string(value, ss.str().c_str());
       } else {
         Tuple *tuple = nullptr;
+        project_oper.open();
         while ((rc = project_oper.next()) == RC::SUCCESS) {
           // 返回结果不止一行
           if (tuple != nullptr) {

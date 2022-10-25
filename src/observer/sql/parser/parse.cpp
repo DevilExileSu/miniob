@@ -374,7 +374,6 @@ void drop_table_destroy(DropTable *drop_table)
 
 void create_index_append_attribute_name(CreateIndex *create_index, const char *attr_name) {
   create_index->attribute_name[create_index->attr_num] = strdup(attr_name);
-  printf("%s\n", attr_name);
   ++create_index->attr_num;
 }
 

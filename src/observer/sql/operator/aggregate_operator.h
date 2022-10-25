@@ -22,6 +22,7 @@ public:
 
     float data_f = 0.0;
     switch (data_type_) {
+      case DATES:
       case INTS: {
         data_f = *(int *)data;
         if (min_ == nullptr || compare_int(data, min_) < 0) {
@@ -68,6 +69,12 @@ public:
         return std::string(max_);
       case FLOATS:
         return double2string(*(float *)max_);
+      case DATES: {
+        int value = *(int *)max_;
+        char buf[16] = {0};
+        sprintf(buf, "%04d-%02d-%02d", value/10000, (value%10000)/100, value%100);
+        return std::string(buf);
+      }
       default:
         return std::string("error");
     }
@@ -80,9 +87,15 @@ public:
         return std::string(min_);
       case FLOATS:
         return double2string(*(float *)min_);
+      case DATES: {
+        int value = *(int *)min_;
+        char buf[16] = {0};
+        sprintf(buf, "%04d-%02d-%02d", value/10000, (value%10000)/100, value%100);
+        return std::string(buf);
+      }
       default:
         return std::string("error");
-    } 
+    }
   }
   float sum() { return sum_; }
   float avg() { return sum_ / count_; }
