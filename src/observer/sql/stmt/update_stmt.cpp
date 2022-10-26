@@ -184,6 +184,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
           // 返回结果不止一行
           if (tuple != nullptr) {
             rc = RC::INTERNAL;
+            return rc;
           }
           // 这里返回的是project_oper的成员属性，地址不变
           tuple = project_oper.current_tuple();
@@ -271,7 +272,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
     values.emplace_back(value);
   }
 
-    // TODO(Vanish): unique-index: 检查是否满足unique, 如果存在text类型直接跳过
+    // unique-index: 检查是否满足unique, 如果存在text类型直接跳过
   if (!has_text) {
     if ((rc = table->check_unique(field_metas, values, update.conditions, update.condition_num)) != RC::SUCCESS) {
       return rc; 

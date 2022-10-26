@@ -77,7 +77,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   bool is_agg = false;
   
   for (int i = select_sql.attr_num - 1; i >= 0; i--) {
-    // TODO(Vanish): 如何RelAttr包含聚合函数的处理
+    // RelAttr包含聚合函数的处理
     const RelAttr &relation_attr = select_sql.attributes[i];
 
     // 1. 先判断是否为字段和聚合函数混合
