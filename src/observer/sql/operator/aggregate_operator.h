@@ -15,13 +15,17 @@ public:
   void add_tuple(TupleCell &cell) {
     // 获取cell的数据
     char *data = const_cast<char *>(cell.data());
+    AttrType data_type = cell.attr_type();
     // 按照data的数据类型相应的转换，这里为了统计，全部转换为浮点型
-    if (data_type_ == AttrType::UNDEFINED) {
-      data_type_ = cell.attr_type();
+    if (data_type_ == AttrType::UNDEFINED || data_type_ == AttrType::NULL_) {
+      data_type_ = data_type;
     }
 
     float data_f = 0.0;
-    switch (data_type_) {
+    switch (data_type) {
+      case NULL_: {
+        break;
+      }
       case DATES:
       case INTS: {
         data_f = *(int *)data;
@@ -56,10 +60,11 @@ public:
       default:
         break;
     }
-    if (data_type_ != AttrType::NULL_) {
-      ++count_;
+    if (data_type != AttrType::NULL_) {
+      ++not_null_count_;
       sum_ += data_f;
     }
+    ++count_;
   }
 
   std::string max() { 
@@ -105,9 +110,10 @@ public:
     }
   }
   float sum() { return sum_; }
-  float avg() { return sum_ / count_; }
+  float avg() { return sum_ / not_null_count_; }
   int count() { return count_; }
-
+  int not_null_count() { return not_null_count_; }
+  bool is_null() { return count_ == 0; }
 
 
 private:
@@ -115,6 +121,7 @@ private:
   char *min_ = nullptr;
   char *max_ = nullptr;
   int count_ = 0;
+  int not_null_count_ = 0;
   float sum_ = .0;
 };
 
@@ -141,7 +148,7 @@ public:
 
   void print_header(std::ostream &os);
   void to_string(std::ostream &os);
-
+  bool is_null(int index) { return stat_[index].is_null(); }
 
 private:
   // 多少个聚合函数

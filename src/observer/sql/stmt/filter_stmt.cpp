@@ -111,7 +111,6 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   }
 
   if (condition.right_is_attr) {
-    Table *table = nullptr;
     const FieldMeta *field = nullptr;
     rc = get_table_and_field(db, default_table, tables, condition.right_attr, right_table, field);  
     if (rc != RC::SUCCESS) {
@@ -136,7 +135,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   if (condition_value != nullptr 
       && condition_field != nullptr 
       && condition_value->type != condition_field->type() 
-      && condition_field->type() == AttrType::DATES) {
+      && condition_field->type() == AttrType::DATES && condition_value->type != AttrType::NULL_) {
 
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
   }

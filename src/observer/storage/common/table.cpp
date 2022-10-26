@@ -610,6 +610,7 @@ RC Table::check_unique(Value *values, int value_num) {
       Record record;
       while (scanner.has_next()) {
         rc = scanner.next(record);
+        int bitmap = *(int *)(record.data() + table_meta_.bitmap_offset());
         if (rc != RC::SUCCESS) {
           LOG_WARN("failed to fetch next record. rc=%d:%s", rc, strrc(rc));
           return rc;
@@ -621,10 +622,10 @@ RC Table::check_unique(Value *values, int value_num) {
           const FieldMeta *field_meta = table_meta_.field(field.c_str());
           size_t offset = field_meta->offset();
           size_t len = field_meta->len();
-          
+          bool is_null = 1 & (bitmap >> field_meta->index());
           // 是否需要考虑不同类型之间内存对齐问题？
           if (record_data != nullptr) {
-            if (0 != memcmp(record.data() + offset, record_data + offset, len)) {
+            if (0 != memcmp(record.data() + offset, record_data + offset, len) || is_null) {
               flag = false;
               break;
             }
@@ -678,6 +679,8 @@ RC Table::check_unique(std::vector<const FieldMeta *> field_metas, std::vector<c
           char *copy_to = update_data + field_metas[i]->offset();
           if (field_metas[i]->type() == AttrType::CHARS) {
             memcpy(copy_to, values[i]->data, std::min(field_metas[i]->len(), (int)strlen((char *) values[i]->data))+1);
+          } else if (field_metas[i]->type() == AttrType::NULL_) {
+            continue;
           } else {
             memcpy(copy_to, values[i]->data, field_metas[i]->len());
           }
@@ -715,16 +718,25 @@ RC Table::check_unique(std::vector<const FieldMeta *> field_metas, std::vector<c
           LOG_WARN("failed to fetch next record. rc=%d:%s", rc, strrc(rc));
           return rc;
         }
+        int bitmap = *(int *)(record.data() + table_meta_.bitmap_offset());
 
         char data[record_size];
         size_t length = 0;
         // 遍历各个字段，判断对应字段是否存在对应值
+        bool has_null = false;
         for (auto field: fields) {
           const FieldMeta *field_meta = table_meta_.field(field.c_str());
+          if (1 & (bitmap >> field_meta->index())) {
+            has_null = true;
+            break;
+          }
           size_t offset = field_meta->offset();
           size_t len = field_meta->len();
           memcpy(data + length, record.data() + offset, len);
           length += len;
+        }
+        if (has_null) {
+          continue;
         }
         std::string str;
         str.assign(data, length);

@@ -335,6 +335,7 @@ attr_def:
 nullable:
 	{ $$=0; }
 	| NULLABLE { $$=1; }
+	| NOT NULL_T { $$=2; }
 	;
 
 number:

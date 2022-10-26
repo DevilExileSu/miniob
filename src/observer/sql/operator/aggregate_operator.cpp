@@ -106,6 +106,10 @@ void AggregateOperator::to_string(std::ostream &os) {
             os << rel_attrs_[i].num;
             continue;
         }
+        if (stat_[i].is_null() && rel_attrs_[i].agg_func != AggFunc::COUNT) {
+            os << "NULL";
+            continue;
+        }
         switch (rel_attrs_[i].agg_func) {
             case MAX: {
                 os << stat_[i].max();
@@ -117,11 +121,14 @@ void AggregateOperator::to_string(std::ostream &os) {
             }
             case AVG: {
                 os << double2string(stat_[i].avg());
-                
                 break;
             }
             case COUNT: {
-                os << stat_[i].count();
+                if (0 == strcmp(rel_attrs_[i].attribute_name, "*")) {
+                    os << stat_[i].count();
+                } else {
+                    os << stat_[i].not_null_count();
+                }
                 break;
             }
             case SUM: {

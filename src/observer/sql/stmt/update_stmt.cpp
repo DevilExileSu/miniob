@@ -173,7 +173,11 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
           }
         }
         value_destroy(value);
-        value_init_string(value, ss.str().c_str());
+        if (agg_oper.is_null(0)) {
+          value_init_null(value);
+        } else {
+          value_init_string(value, ss.str().c_str());
+        }
       } else {
         Tuple *tuple = nullptr;
         TupleCell cell;
@@ -200,7 +204,11 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
           return rc;
         }
         value_destroy(value);
-        value_init_string(value, ss.str().c_str());
+        if (tuple == nullptr) {
+          value_init_null(value);
+        } else {
+          value_init_string(value, ss.str().c_str());
+        }
       }
     } else if (value->type == AttrType::AGGFUNC) {
       // 2. 如果value是AGGFUNC类型
@@ -270,7 +278,11 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
         rc = agg_oper.close();
       }
       value_destroy(value);
-      value_init_string(value, ss.str().c_str());
+      if (agg_oper.is_null(0)) {
+        value_init_null(value);
+      } else {
+        value_init_string(value, ss.str().c_str());
+      }
     }
 
     // 在类型转换之前，判断是否是NULL_，是的话跳过
