@@ -52,8 +52,12 @@ typedef enum {
   GREAT_THAN,   //">"     5
   LIKE_MATCH,   // like   6
   NOT_LIKE,     // not like  
-  IN_OP,           // in 
-  NOT_IN_OP,       // not in
+  IN_OP,        // in 
+  NOT_IN_OP,    // not in
+  IS_OP,        // is
+  IS_NOT_OP,    // is not
+  EXISTS_OP,    // exist
+  NOT_EXISTS_OP,// not exist
   NO_OP
 } CompOp;
 
@@ -66,6 +70,7 @@ typedef enum
   FLOATS,
   DATES,
   TEXTS,
+  NULL_,   // 可能参与比较放在TEXTS的后边，下面两个是不参与比较的
   AGGFUNC,
   SELECTS,
 } AttrType;
@@ -142,6 +147,7 @@ typedef struct {
   char *name;     // Attribute name
   AttrType type;  // Type of attribute
   size_t length;  // Length of attribute
+  int nullable;
 } AttrInfo;
 
 // struct of craete_table
@@ -245,6 +251,7 @@ int to_date(const char *v);
 int value_init_date(Value *value, const char *v);
 void value_init_agg(Value *value, RelAttr *v);
 void value_init_select(Value *value, Selects *v);
+void value_init_null(Value *value);
 
 void value_destroy(Value *value);
 
@@ -252,7 +259,7 @@ void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr
     int right_is_attr, RelAttr *right_attr, Value *right_value);
 void condition_destroy(Condition *condition);
 
-void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length);
+void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length, int nullable);
 void attr_info_destroy(AttrInfo *attr_info);
 
 void selects_init(Selects *selects, ...);

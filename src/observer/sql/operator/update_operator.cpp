@@ -34,7 +34,6 @@ RC UpdateOperator::open()
       LOG_WARN("failed to update record: %s", strrc(rc));
       return rc;
     }
-
   }
   return RC::SUCCESS;
 }

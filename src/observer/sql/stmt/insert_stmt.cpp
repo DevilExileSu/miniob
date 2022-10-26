@@ -65,105 +65,22 @@ RC InsertStmt::create(Db *db, const Inserts &inserts, Stmt *&stmt)
     bool has_text = false;
     // check fields type
     for (int i = 0; i < value_num; i++) {
-      const AttrType value_type = values[i].type;
-      if (field_list[i]->type() != value_type) {  // TODO try to convert the value type to field type
-        switch (field_list[i]->type()) {
-          case INTS:
-            switch (value_type) {
-              case FLOATS: {
-                int n = round(*(float *)values[i].data);
-                value_destroy(&values[i]);
-                value_init_integer(&values[i], n);
-                values[i].type = INTS;
-                break;
-              }
-              case CHARS: {
-                int n = round(atof((char *)values[i].data));
-                value_destroy(&values[i]);
-                value_init_integer(&values[i], n);
-                break;
-              }
-              default:
-                LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_list[i]->type());
-                return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-            }
-            break;
-          case FLOATS:
-            switch (value_type) {
-              case INTS: {
-                float f = *(int *)values[i].data;
-                value_destroy(&values[i]);
-                value_init_float(&values[i], f);
-                break;
-              }
-              case CHARS: {
-                float f = atof((char *)values[i].data);
-                value_destroy(&values[i]);
-                value_init_float(&values[i], f);
-                break;
-              }
-              default:
-                LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_list[i]->type());
-                return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-            }
-            break;
-          case CHARS:
-            switch (value_type) {
-              case INTS: {
-                std::string s = int2string(*(int *)values[i].data);
-                value_destroy(&values[i]);
-                value_init_string(&values[i], s.c_str());
-                break;
-              }
-              case FLOATS: {
-                std::string s = float2string(*(float *)values[i].data);
-                value_destroy(&values[i]);
-                value_init_string(&values[i], s.c_str());
-                break;
-              }
-              default:
-                LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_list[i]->type());
-                return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-            }
-            break;
-          case TEXTS:
-            has_text = true;
-            // value_type 不可能是TEXTS类型，所以这里不需要考虑把TEXTS类型转换为其他类型
-            switch (value_type) {
-              case INTS: {
-                std::string s = int2string(*(int *)values[i].data);
-                value_destroy(&values[i]);
-                value_init_string(&values[i], s.c_str());
-                values[i].type = TEXTS;
-                break;
-              }
-              case FLOATS: {
-                std::string s = float2string(*(float *)values[i].data);
-                value_destroy(&values[i]);
-                value_init_string(&values[i], s.c_str());
-                values[i].type = TEXTS;
-                break;
-              }
-              case CHARS: {
-                values[i].type = TEXTS;
-                break;
-              }
-              default:
-                LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_list[i]->type());
-                return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-            }
-            break;
-          default:
-            LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_list[i]->type());
-            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-        }
+      // 字段可以为null值，并且values[i].type类型为NULL_
+      // 跳过不进行后面的convert
+      if (field_list[i]->nullable() && AttrType::NULL_ == values[i].type) {
+        continue;
+      }
+      RC rc = convert(field_list[i], &values[i], has_text);
+      if (rc != RC::SUCCESS) {
+        return rc;
       }
     }
     
     values_list.emplace_back(values);
     value_amount_list.emplace_back(value_num);
 
-    // TODO(Vanish): unique-index: 检查是否满足unique，如果存在text类型直接跳过
+    // unique-index: 检查是否满足unique，如果存在text类型直接跳过
+    // TODO(Vanish): 引入NULL类型后，unique校验，也会收到影响，但是实际测试并没有索引列为nullable的情况
     RC rc = RC::SUCCESS;
     if (!has_text) {
       if ((rc = table->check_unique(values, value_num)) != RC::SUCCESS) {

@@ -77,36 +77,48 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
 
     const int compare = left_cell.compare(right_cell);
     bool filter_result = false;
-
+    bool has_null = left_cell.attr_type() == AttrType::NULL_ || right_cell.attr_type() == AttrType::NULL_;
     switch (comp) {
     case EQUAL_TO: {
-      filter_result = (0 == compare); 
+      filter_result = (0 == compare && !has_null) ; 
     } break;
     case LESS_EQUAL: {
-      filter_result = (compare <= 0); 
+      filter_result = (compare <= 0 && !has_null); 
     } break;
     case NOT_EQUAL: {
-      filter_result = (compare != 0);
+      filter_result = (compare != 0 && !has_null);
     } break;
     case LESS_THAN: {
-      filter_result = (compare < 0);
+      filter_result = (compare < 0 && !has_null);
     } break;
     case GREAT_EQUAL: {
-      filter_result = (compare >= 0);
+      filter_result = (compare >= 0 && !has_null);
     } break;
     case GREAT_THAN: {
-      filter_result = (compare > 0);
+      filter_result = (compare > 0 && !has_null);
     } break;
     case LIKE_MATCH: {
-      filter_result = like_match(left_cell.data(), right_cell.data());
+      filter_result = (like_match(left_cell.data(), right_cell.data()) && !has_null);
     } break;
     case NOT_LIKE: {
-      filter_result = !like_match(left_cell.data(), right_cell.data());
+      filter_result = (!like_match(left_cell.data(), right_cell.data()) && !has_null);
     } break;
     case IN_OP: {
       filter_result = false;
     } break;
     case NOT_IN_OP: {
+      filter_result = false;
+    } break;
+    case IS_OP: {
+      filter_result = (left_cell.attr_type() == AttrType::NULL_ && right_cell.attr_type() == AttrType::NULL_);
+    } break;
+    case IS_NOT_OP: {
+      filter_result = (left_cell.attr_type() != AttrType::NULL_ || right_cell.attr_type() != AttrType::NULL_);
+    } break;
+    case EXISTS_OP: {
+      filter_result = false;
+    } break;
+    case NOT_EXISTS_OP: {
       filter_result = false;
     } break;
     default: {

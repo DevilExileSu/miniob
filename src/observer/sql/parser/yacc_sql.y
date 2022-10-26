@@ -120,6 +120,7 @@ ParserContext *get_context(yyscan_t scanner)
         SET
         ON
 		IN
+		IS
 		NOT
 		EXIST
 		INNER
@@ -149,7 +150,6 @@ ParserContext *get_context(yyscan_t scanner)
   float floats;
 	char *position;
 }
-
 %token <number> NUMBER
 %token <floats> FLOAT 
 %token <string> DATE
@@ -167,6 +167,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <value1> value;
 %type <attr1> agg;
 %type <number> number;
+%type <number> nullable;
 
 %%
 
@@ -307,10 +308,10 @@ attr_def_list:
     ;
     
 attr_def:
-    ID_get type LBRACE number RBRACE 
+    ID_get type LBRACE number RBRACE nullable 
 		{
 			AttrInfo attribute;
-			attr_info_init(&attribute, CONTEXT->id, $2, $4);
+			attr_info_init(&attribute, CONTEXT->id, $2, $4, $6);
 			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
 			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name =(char*)malloc(sizeof(char));
 			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
@@ -318,10 +319,10 @@ attr_def:
 			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].length = $4;
 			CONTEXT->value_length++;
 		}
-    |ID_get type
+    |ID_get type nullable
 		{
 			AttrInfo attribute;
-			attr_info_init(&attribute, CONTEXT->id, $2, 4);
+			attr_info_init(&attribute, CONTEXT->id, $2, 4, $3);
 			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
 			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name=(char*)malloc(sizeof(char));
 			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
@@ -330,6 +331,12 @@ attr_def:
 			CONTEXT->value_length++;
 		}
     ;
+
+nullable:
+	{ $$=0; }
+	| NULLABLE { $$=1; }
+	;
+
 number:
 		NUMBER {$$ = $1;}
 		;
@@ -407,6 +414,9 @@ value:
 			$1 = substr($1,1,strlen($1)-2);
   			value_init_string(&CONTEXT->values[CONTEXT->value_length++], $1);
 		}
+	|NULL_T {
+		value_init_null(&CONTEXT->values[CONTEXT->value_length++]);
+	}
     ;
     
 delete:		/*  delete 语句的语法解析树*/
@@ -809,7 +819,10 @@ comOp:
 	| NOT LIKE { CONTEXT->comp = NOT_LIKE; }
 	| IN { CONTEXT->comp = IN_OP; }
 	| NOT IN { CONTEXT->comp = NOT_IN_OP; }
-	// | NOT EXIST { CONTEXT->comp = NOT_EXIST_OP; }
+	| EXIST { CONTEXT->comp =EXISTS_OP; }
+	| NOT EXIST { CONTEXT->comp = NOT_EXISTS_OP; }
+	| IS { CONTEXT->comp = IS_OP; }
+	| IS NOT { CONTEXT->comp = IS_NOT_OP; }
     ;
 
 load_data:

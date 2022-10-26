@@ -53,6 +53,7 @@ QUOTE            [\'\"]
 [Oo][Nn]                                             RETURN_TOKEN(ON);
 [Ii][Nn]                                             RETURN_TOKEN(IN);
 [Nn][Oo][Tt]                                         RETURN_TOKEN(NOT);
+[Ii][Ss]                                             RETURN_TOKEN(IS);
 [Ee][Xx][Ii][Ss][Tt]                                 RETURN_TOKEN(EXIST);
 [Ii][Nn][Nn][Ee][Rr]                                 RETURN_TOKEN(INNER);
 [Jj][Oo][Ii][Nn]                                     RETURN_TOKEN(JOIN);

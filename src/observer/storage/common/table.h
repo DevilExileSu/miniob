@@ -113,6 +113,16 @@ private:
   RC insert_text_data(const char *data);
   RC delete_text(Record *record, FieldMeta &field_meta);
   RC update_text(Record *record, const FieldMeta *field_meta, const char *data);
+  void update_null_bitmap(int &bitmap, std::vector<const FieldMeta *> field_metas, std::vector<const Value *> values) {
+    for (int i=0; i <values.size(); i++) {
+      int index = field_metas[i]->index();
+      if (values[i]->type == AttrType::NULL_) {
+        bitmap |= (1 << index);
+      } else {
+       bitmap &= ~(1 << index); 
+      }
+    }
+  }
 
 public:
   RC recover_insert_record(Record *record);

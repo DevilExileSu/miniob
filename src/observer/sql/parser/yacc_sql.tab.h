@@ -92,34 +92,35 @@ extern int yydebug;
     SET = 293,                     /* SET  */
     ON = 294,                      /* ON  */
     IN = 295,                      /* IN  */
-    NOT = 296,                     /* NOT  */
-    EXIST = 297,                   /* EXIST  */
-    INNER = 298,                   /* INNER  */
-    JOIN = 299,                    /* JOIN  */
-    LOAD = 300,                    /* LOAD  */
-    DATA = 301,                    /* DATA  */
-    INFILE = 302,                  /* INFILE  */
-    MAX_T = 303,                   /* MAX_T  */
-    MIN_T = 304,                   /* MIN_T  */
-    COUNT_T = 305,                 /* COUNT_T  */
-    AVG_T = 306,                   /* AVG_T  */
-    SUM_T = 307,                   /* SUM_T  */
-    LIKE = 308,                    /* LIKE  */
-    EQ = 309,                      /* EQ  */
-    LT = 310,                      /* LT  */
-    GT = 311,                      /* GT  */
-    LE = 312,                      /* LE  */
-    GE = 313,                      /* GE  */
-    NE = 314,                      /* NE  */
-    NUMBER = 315,                  /* NUMBER  */
-    FLOAT = 316,                   /* FLOAT  */
-    DATE = 317,                    /* DATE  */
-    TEXT = 318,                    /* TEXT  */
-    ID = 319,                      /* ID  */
-    PATH = 320,                    /* PATH  */
-    SSS = 321,                     /* SSS  */
-    STAR = 322,                    /* STAR  */
-    STRING_V = 323                 /* STRING_V  */
+    IS = 296,                      /* IS  */
+    NOT = 297,                     /* NOT  */
+    EXIST = 298,                   /* EXIST  */
+    INNER = 299,                   /* INNER  */
+    JOIN = 300,                    /* JOIN  */
+    LOAD = 301,                    /* LOAD  */
+    DATA = 302,                    /* DATA  */
+    INFILE = 303,                  /* INFILE  */
+    MAX_T = 304,                   /* MAX_T  */
+    MIN_T = 305,                   /* MIN_T  */
+    COUNT_T = 306,                 /* COUNT_T  */
+    AVG_T = 307,                   /* AVG_T  */
+    SUM_T = 308,                   /* SUM_T  */
+    LIKE = 309,                    /* LIKE  */
+    EQ = 310,                      /* EQ  */
+    LT = 311,                      /* LT  */
+    GT = 312,                      /* GT  */
+    LE = 313,                      /* LE  */
+    GE = 314,                      /* GE  */
+    NE = 315,                      /* NE  */
+    NUMBER = 316,                  /* NUMBER  */
+    FLOAT = 317,                   /* FLOAT  */
+    DATE = 318,                    /* DATE  */
+    TEXT = 319,                    /* TEXT  */
+    ID = 320,                      /* ID  */
+    PATH = 321,                    /* PATH  */
+    SSS = 322,                     /* SSS  */
+    STAR = 323,                    /* STAR  */
+    STRING_V = 324                 /* STRING_V  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -128,7 +129,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 143 "yacc_sql.y"
+#line 144 "yacc_sql.y"
 
   struct _Attr *attr1;
   struct _Condition *condition1;
@@ -138,7 +139,7 @@ union YYSTYPE
   float floats;
 	char *position;
 
-#line 142 "yacc_sql.tab.h"
+#line 143 "yacc_sql.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -132,6 +132,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   filter_unit->set_right(right);
 
   // 检查两个类型是否能够比较
+  // 日期类型不匹配不进行比较，其他类型不同，可以通过隐式转换来进行比较
   if (condition_value != nullptr 
       && condition_field != nullptr 
       && condition_value->type != condition_field->type() 

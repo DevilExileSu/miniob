@@ -97,10 +97,3 @@ FAILURE
 SELECT min(num),max(num),avg(num) FROM aggregation_func;
 MIN(NUM) | MAX(NUM) | AVG(NUM)
 12 | 18 | 15
-
-
-SELECT max(birthday) FROM aggregation_func;
-
-SELECT avg(num),count(*) FROM aggregation_func;
-
-UPDATE Update_table_2 SET t_name=(select Update_table_not_exist.t_name from Update_table_not_exist where Update_table_not_exist.id=1) WHERE id=1;

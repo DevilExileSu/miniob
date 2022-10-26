@@ -476,11 +476,18 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
     LOG_WARN("Input values don't match the table's schema, table name:%s", table_meta_.name());
     return RC::SCHEMA_FIELD_MISSING;
   }
-
+  int bitmap = 0;
   const int normal_field_start_index = table_meta_.sys_field_num();
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
+    int index = field->index();
+    if (value.type == AttrType::NULL_) {
+      bitmap |= (1 << index);
+      continue;
+    } else {
+      bitmap &= ~(1 << index); 
+    }
     if (field->type() != value.type) {
       LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
           table_meta_.name(),
@@ -491,15 +498,22 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
     }
   }
 
+
   // 复制所有字段的值
   int record_size = table_meta_.record_size();
   char *record = new char[record_size];
+
+  // 复制bitmap
+  memcpy(record + table_meta_.bitmap_offset(), &bitmap, BASE_BITMAP_SIZE);
+
   RC rc = RC::SUCCESS;
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
     size_t copy_len = field->len();
-    if (field->type() == CHARS) {
+    if (value.type == NULL_) {
+      continue;
+    } else if (field->type() == CHARS) {
       const size_t data_len = strlen((const char *)value.data);
       // 如果data_len > copy_len 防止超过record_size大小导致内存越界
       if (copy_len > data_len) {
@@ -513,10 +527,8 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
       // 字节类型长度默认也是4个字节，所以可以不同担心越界问题
       copy_len = sizeof(PageNum);
     }
-    // TODO(vanish): NULL类型可能需要修改这里
     memcpy(record + field->offset(), value.data, copy_len);
   }
-
   record_out = record;
   return rc;
 }
@@ -1109,23 +1121,33 @@ RC Table::update_record(Trx *trx, Record *record, std::vector<const FieldMeta *>
               record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
   }
   
+  int bitmap = *(int *)(record->data() + table_meta_.bitmap_offset());
   // 1. 修改record中的数据
   // 如果是TEXT类型，不需要修改record数据
-    for (int i=0; i<values.size(); i++) {
-      if (field_metas[i]->type() == AttrType::TEXTS) {
-        rc = update_text(record, field_metas[i], (const char *)values[i]->data);
-        if (rc != RC::SUCCESS) {
-          return rc;
-        }
-      }
-      char *copy_to = record->data() + field_metas[i]->offset();
-      if (field_metas[i]->type() == AttrType::CHARS) {
-        memcpy(copy_to, values[i]->data, std::min(field_metas[i]->len(), (int)strlen((char *) values[i]->data))+1);
-      } else if (field_metas[i]->type() != AttrType::TEXTS) {
-        memcpy(copy_to, values[i]->data, field_metas[i]->len());
-      }
+  for (int i=0; i<values.size(); i++) {
+    // 更新bitmap
+    int index = field_metas[i]->index();
+    if (values[i]->type == AttrType::NULL_) {
+      bitmap |= (1 << index);
+      continue;
+    } else {
+      bitmap &= ~(1 << index); 
     }
 
+    if (field_metas[i]->type() == AttrType::TEXTS) {
+      rc = update_text(record, field_metas[i], (const char *)values[i]->data);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+    }
+    char *copy_to = record->data() + field_metas[i]->offset();
+    if (field_metas[i]->type() == AttrType::CHARS) {
+      memcpy(copy_to, values[i]->data, std::min(field_metas[i]->len(), (int)strlen((char *) values[i]->data))+1);
+    } else if (field_metas[i]->type() != AttrType::TEXTS) {
+      memcpy(copy_to, values[i]->data, field_metas[i]->len());
+    }
+  }
+  memcpy(record->data() + table_meta_.bitmap_offset(), &bitmap, BASE_BITMAP_SIZE);
   rc = record_handler_->update_record(record);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to update record of record (rid=%d.%d). rc=%d:%s", 

@@ -136,6 +136,14 @@ public:
     const TupleCellSpec *spec = speces_[index];
     FieldExpr *field_expr = (FieldExpr *)spec->expression();
     const FieldMeta *field_meta = field_expr->field().meta();
+    int bitmap = *(int *)(this->record_->data() + table_->table_meta().bitmap_offset());
+    // 1. 先判断该字段对应的值是否为NULL
+    bool is_null = 1 & (bitmap >> field_meta->index());
+    if (is_null) {
+      cell.set_type(AttrType::NULL_);
+      return RC::SUCCESS;
+    }
+    // 2. 将data替换为`NULL`
     cell.set_type(field_meta->type());
     if (field_meta->type() == AttrType::TEXTS) {
       table_->get_text_data(record_, field_meta, (char *)text_data);

@@ -50,6 +50,9 @@ void TupleCell::to_string(std::ostream &os) const
     sprintf(buf, "%04d-%02d-%02d", value/10000, (value%10000)/100, value%100);
     os << buf;
   }break;
+  case NULL_: {
+    os << "NULL";
+  } break;
   default: {
     LOG_WARN("unsupported attr type: %d", attr_type_);
   } break;
@@ -58,6 +61,9 @@ void TupleCell::to_string(std::ostream &os) const
 
 int TupleCell::compare(const TupleCell &other) const
 {
+  if (this->attr_type_ == NULL_ || other.attr_type_ == NULL_) {
+    return -1;
+  }
   // 对select显示结果排序时可能需要进行修改
   if (this->attr_type_ == other.attr_type_) {
     switch (this->attr_type_) {

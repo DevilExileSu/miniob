@@ -165,9 +165,12 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
         agg_oper.to_string(ss);
         if (rc != RC::RECORD_EOF) {
           LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
-          rc =  agg_oper.close();
+          agg_oper.close();
+          return rc;
         } else {
-          rc = agg_oper.close();
+          if ((rc = agg_oper.close()) != RC::SUCCESS) {
+            return rc;
+          }
         }
         value_destroy(value);
         value_init_string(value, ss.str().c_str());
@@ -180,6 +183,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
         if (rc != RC::SUCCESS) {
           return rc;
         }
+        // TODO 如果没有返回数据，直接赋值为NULL
         while ((rc = project_oper.next()) == RC::SUCCESS) {
           // 返回结果不止一行
           if (tuple != nullptr) {
@@ -192,7 +196,9 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
           tuple->cell_at(0, cell);
           cell.to_string(ss);
         }
-        rc = project_oper.close();
+        if ((rc = project_oper.close()) != RC::SUCCESS)  {
+          return rc;
+        }
         value_destroy(value);
         value_init_string(value, ss.str().c_str());
       }
@@ -259,20 +265,29 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
       if (rc != RC::RECORD_EOF) {
         LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
         agg_oper.close();
+        return rc;
       } else {
         rc = agg_oper.close();
       }
       value_destroy(value);
       value_init_string(value, ss.str().c_str());
-
     }
-    rc = convert(field_meta, value, has_text);
+
+    // 在类型转换之前，判断是否是NULL_，是的话跳过
+    if (field_meta->nullable() && AttrType::NULL_ == value->type) {
+      field_metas.emplace_back(field_meta);
+      values.emplace_back(value);
+      continue;
+    }
+    if ((rc = convert(field_meta, value, has_text)) != RC::SUCCESS) {
+      return rc;
+    }
     
     field_metas.emplace_back(field_meta);
     values.emplace_back(value);
   }
 
-    // unique-index: 检查是否满足unique, 如果存在text类型直接跳过
+  // unique-index: 检查是否满足unique, 如果存在text类型直接跳过
   if (!has_text) {
     if ((rc = table->check_unique(field_metas, values, update.conditions, update.condition_num)) != RC::SUCCESS) {
       return rc; 

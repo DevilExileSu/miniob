@@ -23,6 +23,10 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/index_meta.h"
 #include "common/lang/serializable.h"
 
+static constexpr const char *NULL_BITMAP = "__null_bitmap";
+static constexpr const int BASE_BITMAP_SIZE = 4;
+static constexpr const int SYS_FIELD_NUM = 2;
+
 class TableMeta : public common::Serializable {
 public:
   TableMeta() = default;
@@ -54,6 +58,8 @@ public:
 
   int record_size() const;
 
+  int bitmap_offset() const;
+
 public:
   int serialize(std::ostream &os) const override;
   int deserialize(std::istream &is) override;
@@ -62,7 +68,7 @@ public:
   void desc(std::ostream &os) const;
 
 protected:
-  static RC init_sys_fields();
+  static RC init_sys_fields(int field_num);
 
 protected:
   std::string name_;

@@ -14,7 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <algorithm>
 #include <common/lang/string.h>
-
+#include <common/lang/bitmap.h>
 #include "storage/common/table_meta.h"
 #include "json/json.h"
 #include "common/log/log.h"
@@ -38,17 +38,27 @@ void TableMeta::swap(TableMeta &other) noexcept
   std::swap(record_size_, other.record_size_);
 }
 
-RC TableMeta::init_sys_fields()
+RC TableMeta::init_sys_fields(int field_num)
 {
-  sys_fields_.reserve(1);
+  sys_fields_.reserve(2);
   FieldMeta field_meta;
+  FieldMeta null_bitmap; 
+
   RC rc = field_meta.init(Trx::trx_field_name(), Trx::trx_field_type(), 0, Trx::trx_field_len(), false);
+
+  // 为了不影响其他功能，这里把null_bitmap放在事务ID之后
+  // TODO(Vanish): 需要字节对齐吗？ 直接使用4个字节，用int表示，简化处理
+  // 如果使用8位1个字节，需要每8位转换为int8_t, 之后判断字段所在的字节， /8, %8操作
+  // int bitmap_size = BASE_BITMAP_SIZE * ((field_num / 8) + 1);
+  rc = null_bitmap.init(NULL_BITMAP, AttrType::NULL_, Trx::trx_field_len(), BASE_BITMAP_SIZE, false);
+
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to init trx field. rc = %d:%s", rc, strrc(rc));
     return rc;
   }
 
   sys_fields_.push_back(field_meta);
+  sys_fields_.push_back(null_bitmap);
   return rc;
 }
 RC TableMeta::init(const char *name, int field_num, const AttrInfo attributes[])
@@ -65,7 +75,7 @@ RC TableMeta::init(const char *name, int field_num, const AttrInfo attributes[])
 
   RC rc = RC::SUCCESS;
   if (sys_fields_.empty()) {
-    rc = init_sys_fields();
+    rc = init_sys_fields(field_num);
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to init_sys_fields, name:%s ", name);
       return rc;
@@ -82,7 +92,8 @@ RC TableMeta::init(const char *name, int field_num, const AttrInfo attributes[])
 
   for (int i = 0; i < field_num; i++) {
     const AttrInfo &attr_info = attributes[i];
-    rc = fields_[i + sys_fields_.size()].init(attr_info.name, attr_info.type, field_offset, attr_info.length, true);
+    rc = fields_[i + sys_fields_.size()].init(attr_info.name, attr_info.type, 
+                                              field_offset, attr_info.length, field_num - i - 1, true, (attr_info.nullable == 1));
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to init field meta. table name=%s, field name: %s", name, attr_info.name);
       return rc;
@@ -207,6 +218,11 @@ int TableMeta::record_size() const
   return record_size_;
 }
 
+int TableMeta::bitmap_offset() const 
+{
+  return sys_fields_.back().offset();
+}
+
 int TableMeta::serialize(std::ostream &ss) const
 {
 
@@ -243,9 +259,6 @@ int TableMeta::serialize(std::ostream &ss) const
 
 int TableMeta::deserialize(std::istream &is)
 {
-  if (sys_fields_.empty()) {
-    init_sys_fields();
-  }
 
   Json::Value table_value;
   Json::CharReaderBuilder builder;
@@ -273,6 +286,12 @@ int TableMeta::deserialize(std::istream &is)
 
   RC rc = RC::SUCCESS;
   int field_num = fields_value.size();
+
+  if (sys_fields_.empty()) {
+    // 这里的field_num包含trx和null_bitmap系统field，这里去掉
+    init_sys_fields(field_num - SYS_FIELD_NUM);
+  }
+
   std::vector<FieldMeta> fields(field_num);
   for (int i = 0; i < field_num; i++) {
     FieldMeta &field = fields[i];

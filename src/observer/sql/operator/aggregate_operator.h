@@ -56,12 +56,16 @@ public:
       default:
         break;
     }
-
-    ++count_;
-    sum_ += data_f;
+    if (data_type_ != AttrType::NULL_) {
+      ++count_;
+      sum_ += data_f;
+    }
   }
 
   std::string max() { 
+    if (max_ == nullptr) {
+      return std::string("NULL");
+    }
     switch (data_type_) {
       case INTS:
         return int2string(*(int *)max_);
@@ -80,6 +84,9 @@ public:
     }
   }
   std::string min() {     
+    if (min_ == nullptr) {
+      return std::string("NULL");
+    }
     switch (data_type_) {
       case INTS:
         return int2string(*(int *)min_);
