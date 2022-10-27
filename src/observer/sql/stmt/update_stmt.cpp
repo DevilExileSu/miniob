@@ -204,7 +204,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
           return rc;
         }
         value_destroy(value);
-        if (tuple == nullptr) {
+        if (tuple == nullptr || cell.attr_type() == AttrType::NULL_) {
           value_init_null(value);
         } else {
           value_init_string(value, ss.str().c_str());
