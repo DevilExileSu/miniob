@@ -68,9 +68,6 @@ public:
   }
 
   std::string max() { 
-    if (max_ == nullptr) {
-      return std::string("NULL");
-    }
     switch (data_type_) {
       case INTS:
         return int2string(*(int *)max_);
@@ -89,9 +86,6 @@ public:
     }
   }
   std::string min() {     
-    if (min_ == nullptr) {
-      return std::string("NULL");
-    }
     switch (data_type_) {
       case INTS:
         return int2string(*(int *)min_);
@@ -113,7 +107,7 @@ public:
   float avg() { return sum_ / not_null_count_; }
   int count() { return count_; }
   int not_null_count() { return not_null_count_; }
-  bool is_null() { return count_ == 0; }
+  bool is_null() { return not_null_count_ == 0; }
 
 
 private:
@@ -148,7 +142,7 @@ public:
 
   void print_header(std::ostream &os);
   void to_string(std::ostream &os);
-  bool is_null(int index) { return stat_[index].is_null(); }
+  bool is_null(int index) { return stat_[index].is_null() && rel_attrs_[index].agg_func != AggFunc::COUNT; }
 
 private:
   // 多少个聚合函数
