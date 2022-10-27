@@ -111,7 +111,7 @@ RC Table::create(
     return rc;
   }
 
- for (int i=0; i < attribute_count; i++) {
+ for (size_t i=0; i < attribute_count; i++) {
   if (attributes[i].type == AttrType::TEXTS) {
     // 存在TEXT类型字段，创建text数据文件
     std::string text_data_file = table_text_file(base_dir, name);
@@ -143,7 +143,6 @@ RC Table::drop() {
   sync();
 
   const char *dir = base_dir_.c_str();
-  BufferPoolManager &bpm = BufferPoolManager::instance();
 
   // 1. 删除描述表元数据的文件
   // 1.1 获取表元数据文件路径
@@ -217,7 +216,7 @@ RC Table::open(const char *meta_file, const char *base_dir, CLogManager *clog_ma
   base_dir_ = base_dir;
 
   const int index_num = table_meta_.index_num();
-  for (int i = 0; i < index_num; i++) {
+  for (size_t i = 0; i < index_num; i++) {
     const IndexMeta *index_meta = table_meta_.index(i);
     const std::vector<std::string> fields = index_meta->fields();
     for (auto field: fields) {
@@ -478,7 +477,7 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
   }
   int bitmap = 0;
   const int normal_field_start_index = table_meta_.sys_field_num();
-  for (int i = 0; i < value_num; i++) {
+  for (size_t i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
     int index = field->index();
@@ -507,7 +506,7 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
   memcpy(record + table_meta_.bitmap_offset(), &bitmap, BASE_BITMAP_SIZE);
 
   RC rc = RC::SUCCESS;
-  for (int i = 0; i < value_num; i++) {
+  for (size_t i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
     size_t copy_len = field->len();
@@ -622,6 +621,7 @@ RC Table::check_unique(Value *values, int value_num) {
           const FieldMeta *field_meta = table_meta_.field(field.c_str());
           size_t offset = field_meta->offset();
           size_t len = field_meta->len();
+          // 这里如果某个字段为NULL直接可以插入
           bool is_null = 1 & (bitmap >> field_meta->index());
           // 是否需要考虑不同类型之间内存对齐问题？
           if (record_data != nullptr) {
@@ -675,12 +675,13 @@ RC Table::check_unique(std::vector<const FieldMeta *> field_metas, std::vector<c
         char update_data[record_size];
         memcpy(update_data, record.data(), record_size);
         // 将临时record更新为更新后的值
-        for (int i=0; i<values.size(); i++) {
+        for (size_t i=0; i<values.size(); i++) {
+          if (values[i]->type == AttrType::NULL_) {
+            continue;
+          }
           char *copy_to = update_data + field_metas[i]->offset();
           if (field_metas[i]->type() == AttrType::CHARS) {
             memcpy(copy_to, values[i]->data, std::min(field_metas[i]->len(), (int)strlen((char *) values[i]->data))+1);
-          } else if (field_metas[i]->type() == AttrType::NULL_) {
-            continue;
           } else {
             memcpy(copy_to, values[i]->data, field_metas[i]->len());
           }
@@ -726,6 +727,7 @@ RC Table::check_unique(std::vector<const FieldMeta *> field_metas, std::vector<c
         bool has_null = false;
         for (auto field: fields) {
           const FieldMeta *field_meta = table_meta_.field(field.c_str());
+          // 判断该字段是否对应值是否为null
           if (1 & (bitmap >> field_meta->index())) {
             has_null = true;
             break;
@@ -735,6 +737,7 @@ RC Table::check_unique(std::vector<const FieldMeta *> field_metas, std::vector<c
           memcpy(data + length, record.data() + offset, len);
           length += len;
         }
+        // 有字段为null，继续continue
         if (has_null) {
           continue;
         }
@@ -765,15 +768,26 @@ RC Table::check_unique_before_create(const char *attribute_name[], size_t attr_n
   while (scanner.has_next()) {
     rc = scanner.next(record);
     std::string s;
+
+    int bitmap = *(int *)(record.data() + table_meta_.bitmap_offset());
+    bool has_null = false;
     for (size_t i = 0; i < attr_num; i++) {
+
       const FieldMeta *field_meta = table_meta_.field(attribute_name[i]);
+      if (1 & (bitmap >> field_meta->index())) {
+        has_null = true;
+        break;
+      }
       int offset = field_meta->offset();
       s.append(record.data()+offset, field_meta->len());
     }
-    if (check_set.find(s) != check_set.end()) {
+
+    // 如果有重复值，并且字段中没有null值
+    if (check_set.find(s) != check_set.end() && !has_null) {
       LOG_ERROR("failed to create unique index, because of duplicate values. rc=%d:%s", rc, strrc(rc));
       return RC::GENERIC_ERROR;
     }
+
     check_set.insert(s);
   }
   return RC::SUCCESS;
@@ -1038,7 +1052,7 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
 }
 
 RC Table::show_index(std::ostream &os) {
-  for (int i=0; i < IDNEX_HEADER_NUM; i++) {
+  for (size_t i=0; i < IDNEX_HEADER_NUM; i++) {
     if (i != 0) {
       os << " | ";
     }
@@ -1049,7 +1063,7 @@ RC Table::show_index(std::ostream &os) {
     const IndexMeta index_meta = index->index_meta();
     auto fields = index_meta.fields();
     bool non_unique = !index_meta.unique();
-    for (int i=0; i<fields.size(); i++) {
+    for (size_t i=0; i<fields.size(); i++) {
       os << name() << " | " << non_unique << " | " << index_meta.name() << " | " <<  i+1 << " | " << fields[i] << "\n";
     }
   }
@@ -1136,7 +1150,7 @@ RC Table::update_record(Trx *trx, Record *record, std::vector<const FieldMeta *>
   int bitmap = *(int *)(record->data() + table_meta_.bitmap_offset());
   // 1. 修改record中的数据
   // 如果是TEXT类型，不需要修改record数据
-  for (int i=0; i<values.size(); i++) {
+  for (size_t i=0; i<values.size(); i++) {
     // 更新bitmap
     int index = field_metas[i]->index();
     if (values[i]->type == AttrType::NULL_) {
@@ -1476,7 +1490,7 @@ IndexScanner *Table::find_index_for_scan(const ConditionFilter *filter)
   const CompositeConditionFilter *composite_condition_filter = dynamic_cast<const CompositeConditionFilter *>(filter);
   if (composite_condition_filter != nullptr) {
     int filter_num = composite_condition_filter->filter_num();
-    for (int i = 0; i < filter_num; i++) {
+    for (size_t i = 0; i < filter_num; i++) {
       IndexScanner *scanner = find_index_for_scan(&composite_condition_filter->filter(i));
       if (scanner != nullptr) {
         return scanner;  // 可以找到一个最优的，比如比较符号是=

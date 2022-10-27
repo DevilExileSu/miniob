@@ -187,6 +187,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
         if (rc != RC::SUCCESS) {
           return rc;
         }
+        int cnt = 0;
         // TODO 如果没有返回数据，直接赋值为NULL
         while ((rc = project_oper.next()) == RC::SUCCESS) {
           // 返回结果不止一行
@@ -194,6 +195,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
             rc = RC::INTERNAL;
             return rc;
           }
+          ++cnt;
           // 这里返回的是project_oper的成员属性，地址不变
           tuple = project_oper.current_tuple();
           // 只有一个字段
