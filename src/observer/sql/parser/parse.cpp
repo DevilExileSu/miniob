@@ -29,17 +29,39 @@ void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const
   } else {
     relation_attr->relation_name = nullptr;
   }
+  relation_attr->alias = nullptr;
   relation_attr->attribute_name = strdup(attribute_name);
   relation_attr->agg_func = AggFunc::NONE;
   relation_attr->is_num = 0;
 }
 
+
+void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, const char *alias_name)
+{
+  if (relation_name != nullptr) {
+    relation_attr->relation_name = strdup(relation_name);
+  } else {
+    relation_attr->relation_name = nullptr;
+  }
+  if (alias_name != nullptr) {
+    relation_attr->alias = strdup(alias_name);
+  } else {
+    relation_attr->alias = nullptr;
+  }
+  relation_attr->attribute_name = strdup(attribute_name);
+  relation_attr->agg_func = AggFunc::NONE;
+  relation_attr->is_num = 0;
+}
+
+
 void relation_attr_destroy(RelAttr *relation_attr)
 {
   free(relation_attr->relation_name);
   free(relation_attr->attribute_name);
+  free(relation_attr->alias);
   relation_attr->relation_name = nullptr;
   relation_attr->attribute_name = nullptr;
+  relation_attr->alias = nullptr;
 }
 
 void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name,
@@ -86,17 +108,20 @@ void value_init_integer(Value *value, int v)
   value->type = INTS;
   value->data = malloc(sizeof(v));
   memcpy(value->data, &v, sizeof(v));
+  value->set_size = sizeof(v);
 }
 void value_init_float(Value *value, float v)
 {
   value->type = FLOATS;
   value->data = malloc(sizeof(v));
   memcpy(value->data, &v, sizeof(v));
+  value->set_size = sizeof(v);
 }
 void value_init_string(Value *value, const char *v)
 {
   value->type = CHARS;
   value->data = strdup(v);
+  value->set_size = strlen(v) + 1;
 }
 
 int to_date(const char *v) {
@@ -115,6 +140,7 @@ int value_init_date(Value *value, const char *v) {
   int *p_date = (int *)malloc(sizeof(int));
   *p_date = date;
   value->data = p_date;
+  value->set_size = strlen(v) + 1;
   return 0;
 }
 
@@ -123,21 +149,33 @@ void value_destroy(Value *value)
   value->type = UNDEFINED;
   free(value->data);
   value->data = nullptr;
+  value->set_size = 0;
 }
 
 void value_init_agg(Value *value, RelAttr *v) {
   value->type = AGGFUNC;
   value->data = malloc(sizeof(RelAttr));
   memcpy(value->data, v, sizeof(RelAttr));
+  value->set_size = 0;
 }
 void value_init_select(Value *value, Selects *v) {
   value->type = SELECTS;
   value->data = malloc(sizeof(Selects));
   memcpy(value->data, v, sizeof(Selects));
+  value->set_size = 0;
 }
 void value_init_null(Value *value) {
   value->type = NULL_;
   value->data = nullptr;
+  value->set_size = 0;
+}
+
+void value_init_set(Value *value, Value values[], int begin, int set_size) {
+
+  value->type = SETS;
+  value->data = malloc(set_size * sizeof(Value));
+  memcpy(value->data, values + begin, set_size * sizeof(Value));
+  value->set_size = set_size;
 }
 
 void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
@@ -192,22 +230,32 @@ void selects_append_attribute(Selects *selects, RelAttr *rel_attr)
 }
 void selects_append_relation(Selects *selects, const char *relation_name)
 {
+  selects->alias[selects->relation_num] = nullptr;
   selects->relations[selects->relation_num++] = strdup(relation_name);
 }
 
-void selects_append_attribute_list(Selects *selects, RelAttr attr_list[], size_t attr_num) {
+void selects_append_relation_with_alias(Selects *selects, const char *relation_name, const char *alias_name) {
+  if (alias_name != nullptr) {
+    selects->alias[selects->relation_num] = strdup(alias_name);
+  } else {
+    selects->alias[selects->relation_num] = nullptr; 
+  }
+  selects->relations[selects->relation_num++] = strdup(relation_name);
+}
+
+void selects_append_attribute_list(Selects *selects, RelAttr attr_list[], size_t begin, size_t attr_num) {
   assert(attr_num <= sizeof(selects->attributes) / sizeof(attr_list[0]));
   for (size_t i = 0; i < attr_num; i++) {
-    selects->attributes[i] = attr_list[i];
+    selects->attributes[i] = attr_list[i + begin];
   }
   selects->attr_num = attr_num;
 }
 
-void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num)
+void selects_append_conditions(Selects *selects, Condition conditions[], size_t begin, size_t condition_num)
 {
   assert(condition_num <= sizeof(selects->conditions) / sizeof(selects->conditions[0]));
   for (size_t i = 0; i < condition_num; i++) {
-    selects->conditions[i] = conditions[i];
+    selects->conditions[i] = conditions[i + begin];
   }
   selects->condition_num = condition_num;
 }
@@ -221,6 +269,7 @@ void selects_destroy(Selects *selects)
 
   for (size_t i = 0; i < selects->relation_num; i++) {
     free(selects->relations[i]);
+    free(selects->alias[i]);
     selects->relations[i] = NULL;
   }
   selects->relation_num = 0;
@@ -524,6 +573,7 @@ void query_reset(Query *query)
     case SCF_HELP:
     case SCF_EXIT:
     case SCF_ERROR:
+    case SCF_INVALID_DATE:
       break;
   }
 }

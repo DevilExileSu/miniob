@@ -50,6 +50,7 @@ QUOTE            [\'\"]
 [Tt][Aa][Bb][Ll][Ee][Ss]                             RETURN_TOKEN(TABLES);
 [Ii][Nn][Dd][Ee][Xx]                                 RETURN_TOKEN(INDEX);
 [Uu][Nn][Ii][Qq][Uu][Ee]                             RETURN_TOKEN(UNIQUE);
+[Aa][Ss]                                             RETURN_TOKEN(AS);          
 [Oo][Nn]                                             RETURN_TOKEN(ON);
 [Ii][Nn]                                             RETURN_TOKEN(IN);
 [Nn][Oo][Tt]                                         RETURN_TOKEN(NOT);
@@ -63,6 +64,7 @@ QUOTE            [\'\"]
 [Ff][Rr][Oo][Mm]                                     RETURN_TOKEN(FROM);
 [Ww][Hh][Ee][Rr][Ee]                                 RETURN_TOKEN(WHERE);
 [Aa][Nn][Dd]                                         RETURN_TOKEN(AND);
+[Oo][Rr]                                             RETURN_TOKEN(OR);
 [Ii][Nn][Ss][Ee][rR][tT]                             RETURN_TOKEN(INSERT);
 [Ii][Nn][Tt][Oo]                                     RETURN_TOKEN(INTO);
 [Vv][Aa][Ll][Uu][Ee][Ss]                             RETURN_TOKEN(VALUES);

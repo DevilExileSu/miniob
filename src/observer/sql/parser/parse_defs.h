@@ -38,6 +38,7 @@ typedef enum {
 typedef struct _Attr {
   char *relation_name;   // relation name (may be NULL) 表名
   char *attribute_name;  // attribute name              属性名
+  char *alias;           // alias name                  别名
   AggFunc agg_func; 
   int is_num;
   int num;
@@ -71,6 +72,7 @@ typedef enum
   DATES,
   TEXTS,
   NULL_,   // 可能参与比较放在TEXTS的后边，下面两个是不参与比较的
+  SETS,
   AGGFUNC,
   SELECTS,
 } AttrType;
@@ -79,6 +81,7 @@ typedef enum
 typedef struct _Value {
   AttrType type;  // type of value
   void *data;     // value
+  int set_size;
 } Value;
 
 typedef struct _Condition {
@@ -100,6 +103,7 @@ typedef struct {
   RelAttr attributes[MAX_NUM];    // attrs in Select clause
   size_t relation_num;            // Length of relations in Fro clause
   char *relations[MAX_NUM];       // relations in From clause
+  char *alias[MAX_NUM];
   size_t condition_num;           // Length of conditions in Where clause
   Condition conditions[MAX_NUM];  // conditions in Where clause
 } Selects;
@@ -240,6 +244,7 @@ extern "C" {
 #endif  // __cplusplus
 
 void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const char *attribute_name);
+void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, const char *alias_name);
 void relation_attr_destroy(RelAttr *relation_attr);
 void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, AggFunc agg);
 void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num);
@@ -252,6 +257,7 @@ int value_init_date(Value *value, const char *v);
 void value_init_agg(Value *value, RelAttr *v);
 void value_init_select(Value *value, Selects *v);
 void value_init_null(Value *value);
+void value_init_set(Value *value, Value values[], int begin, int set_size);
 
 void value_destroy(Value *value);
 
@@ -264,9 +270,10 @@ void attr_info_destroy(AttrInfo *attr_info);
 
 void selects_init(Selects *selects, ...);
 void selects_append_attribute(Selects *selects, RelAttr *rel_attr);
-void selects_append_attribute_list(Selects *selects, RelAttr attr_list[], size_t attr_num);
+void selects_append_attribute_list(Selects *selects, RelAttr attr_list[], size_t begin, size_t attr_num);
 void selects_append_relation(Selects *selects, const char *relation_name);
-void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num);
+void selects_append_relation_with_alias(Selects *selects, const char *relation_name, const char *alias_name);
+void selects_append_conditions(Selects *selects, Condition conditions[], size_t begin, size_t condition_num);
 void selects_destroy(Selects *selects);
 
 
