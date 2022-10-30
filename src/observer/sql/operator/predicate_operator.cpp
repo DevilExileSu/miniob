@@ -76,6 +76,11 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     left_expr->get_value(tuple, left_cell);
     right_expr->get_value(tuple, right_cell);
 
+
+    const int compare = left_cell.compare(right_cell);
+    bool filter_result = false;
+    bool has_null = left_cell.attr_type() == AttrType::NULL_ || right_cell.attr_type() == AttrType::NULL_;
+    
     if (left_cell.attr_type() == AttrType::TUPLESET || right_cell.attr_type() == AttrType::TUPLESET) {
       TupleCell *tuple_set_cell = nullptr;
       TupleCell *left_tuple_cell = nullptr;
@@ -96,12 +101,13 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
             Value *value = (Value *)(tuple_set_cell->data() + i * sizeof(Value));
 
             TupleCell *cell = (TupleCell *)(value->data);
-
             if (left_tuple_cell->compare(*cell) == 0) {
-              return true; 
-            }
+              filter_result = true;  
+              break;
+            } 
           }
-          return false;
+          filter_result = false;
+          break;
         } break;
         case NOT_EXISTS_OP:
         case NOT_IN_OP: {
@@ -109,7 +115,8 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
             Value *value = (Value *)(tuple_set_cell->data() + i * sizeof(Value));
             TupleCell *cell = (TupleCell *)(value->data);
             if (left_tuple_cell->compare(*cell) == 0) {
-              return false;
+              filter_result = false;  
+              break;
             }
           }
           return true;
@@ -117,12 +124,8 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         default: {
         } break;
       }
+      continue;
     }
-
-    const int compare = left_cell.compare(right_cell);
-    bool filter_result = false;
-    bool has_null = left_cell.attr_type() == AttrType::NULL_ || right_cell.attr_type() == AttrType::NULL_;
-    
 
     switch (comp) {
     case EQUAL_TO: {
@@ -156,24 +159,28 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
       }
       char *left_data = nullptr;
       char *right_data = nullptr;
+      int set_len = 0;
       int data_len = 0;
       if (left_cell.attr_type() == AttrType::SETS) {
         right_data = left_cell.raw_data();
         left_data = right_cell.raw_data();
         data_len = right_cell.length();
+        set_len = left_cell.length();
       }  else {
         right_data = right_cell.raw_data();
         left_data = left_cell.raw_data();
-        data_len = right_cell.length();
+        data_len = left_cell.length();
+        set_len = right_cell.length();
       }
       RC rc = RC::SUCCESS;
       bool has_text = false;
-      for (int i=0; i<left_cell.length(); i++) {
+      for (int i=0; i < set_len; i++) {
         Value *value = (Value *)(right_data + i * sizeof(Value));
         // 先进行类型转换
         rc = convert(left_cell.attr_type(), value, has_text);
         if (rc != RC::SUCCESS) {
-          return rc;
+          filter_result = false;
+          break;
         }
         if (0 == memcmp(left_data, value->data, data_len)) {
           filter_result = true;
@@ -188,24 +195,31 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
       }
       char *left_data = nullptr;
       char *right_data = nullptr;
+      int set_len = 0;
+      int data_len = 0;
       if (left_cell.attr_type() == AttrType::SETS) {
         right_data = left_cell.raw_data();
         left_data = right_cell.raw_data();
+        data_len = right_cell.length();
+        set_len = left_cell.length();
       }  else {
         right_data = right_cell.raw_data();
         left_data = left_cell.raw_data();
+        data_len = left_cell.length();
+        set_len = right_cell.length();
       }
       RC rc = RC::SUCCESS;
       filter_result = true;
       bool has_text = false;
-      for (int i=0; i<left_cell.length(); i++) {
+      for (int i=0; i<set_len; i++) {
         Value *value = (Value *)(right_data + i * sizeof(Value));
         // 先进行类型转换
         rc = convert(left_cell.attr_type(), value, has_text);
         if (rc != RC::SUCCESS) {
-          return rc;
+          filter_result = false;
+          break;
         }
-        if (0 == memcmp(left_data, value->data, value->set_size)) {
+        if (0 == memcmp(left_data, value->data, data_len)) {
           filter_result = false;
           break;
         }

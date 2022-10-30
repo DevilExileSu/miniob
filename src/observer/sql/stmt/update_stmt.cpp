@@ -155,7 +155,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
         AggregateOperator agg_oper(select_stmt->rel_attrs(), select_stmt->query_fields());
         agg_oper.add_child(&project_oper);
         rc = agg_oper.open();
-        if (rc != RC::SUCCESS) {
+        if (rc != RC::SUCCESS && rc != RC::RECORD_EOF) {
           return rc;
         }
         std::stringstream ss;

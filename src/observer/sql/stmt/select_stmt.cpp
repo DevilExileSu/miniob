@@ -183,7 +183,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
       rc = SelectStmt::create(db, select, sub_stmt);
       SelectStmt *select_stmt = static_cast<SelectStmt *>(sub_stmt);
       sub_select_stmt.emplace_back(select_stmt);
-    } else if (select_sql.conditions[i].right_is_attr == 0 && select_sql.conditions[i].right_value.type == AttrType::SELECTS) {
+    } 
+    if (select_sql.conditions[i].right_is_attr == 0 && select_sql.conditions[i].right_value.type == AttrType::SELECTS) {
       Selects select = *(Selects *)select_sql.conditions[i].right_value.data;
       // 将父查询中的涉及到的表 添加到 子查询中
       for (size_t i = 0; i < select_sql.relation_num; i++) {
