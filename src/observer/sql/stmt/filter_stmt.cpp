@@ -15,10 +15,22 @@ See the Mulan PSL v2 for more details. */
 
 #include "rc.h"
 #include "common/log/log.h"
+#include "common/lang/defer.h"
+#include "sql/operator/table_scan_operator.h"
+#include "sql/operator/index_scan_operator.h"
+#include "sql/operator/predicate_operator.h"
+#include "sql/operator/delete_operator.h"
+#include "sql/operator/update_operator.h"
+#include "sql/operator/project_operator.h"
+#include "sql/operator/cross_product_operator.h"
+#include "sql/operator/aggregate_operator.h"
+#include "sql/parser/parse_defs.h"
 #include "common/lang/string.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/select_stmt.h"
 #include "storage/common/db.h"
 #include "storage/common/table.h"
+#include "sql/executor/execute_stage.h"
 
 FilterStmt::~FilterStmt()
 {
@@ -52,7 +64,7 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
 }
 
 RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-		       const RelAttr &attr, Table *&table, const FieldMeta *&field)
+		       const RelAttr &attr, Table *&table, const FieldMeta *&field, CompOp comp)
 {
   if (common::is_blank(attr.relation_name)) {
     table = default_table;
@@ -68,8 +80,11 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
     LOG_WARN("No such table: attr.relation_name: %s", attr.relation_name);
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
-
-  field = table->table_meta().field(attr.attribute_name);
+  if (common::is_blank(attr.attribute_name) && (comp == CompOp::EXISTS_OP || comp == CompOp::NOT_EXISTS_OP)) {
+    field = table->table_meta().field(0);
+  } else {
+    field = table->table_meta().field(attr.attribute_name);
+  }
   if (nullptr == field) {
     LOG_WARN("no such field in table: table %s, field %s", table->name(), attr.attribute_name);
     table = nullptr;
@@ -96,9 +111,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   FieldMeta *condition_field = nullptr;
   Table *left_table = nullptr;
   Table *right_table = nullptr;
-  if (condition.left_is_attr) {
+  if (condition.left_is_attr != 0) {
     const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.left_attr, left_table, field);  
+    rc = get_table_and_field(db, default_table, tables, condition.left_attr, left_table, field, comp);  
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot find attr");
       return rc;
@@ -112,7 +127,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 
   if (condition.right_is_attr) {
     const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.right_attr, right_table, field);  
+    rc = get_table_and_field(db, default_table, tables, condition.right_attr, right_table, field, comp);  
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot find attr");
       delete left;
@@ -129,7 +144,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   filter_unit->set_comp(comp);
   filter_unit->set_left(left);
   filter_unit->set_right(right);
-
+  
   // 检查两个类型是否能够比较
   // 日期类型不匹配不进行比较，其他类型不同，可以通过隐式转换来进行比较
   if (condition_value != nullptr 
@@ -138,6 +153,10 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       && condition_field->type() == AttrType::DATES && condition_value->type != AttrType::NULL_) {
 
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+  }
+
+  if (condition_value != nullptr && condition_value->type == AttrType::SELECTS) {
+    tmp_stmt->sub_select_units_.emplace_back(filter_unit);
   }
 
   auto add_filter_unit = [&](std::string table_name) {
@@ -171,3 +190,4 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 
   return rc;
 }
+

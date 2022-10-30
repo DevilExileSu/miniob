@@ -73,6 +73,7 @@ typedef enum
   TEXTS,
   NULL_,   // 可能参与比较放在TEXTS的后边，下面两个是不参与比较的
   SETS,
+  TUPLESET,
   AGGFUNC,
   SELECTS,
 } AttrType;
@@ -94,7 +95,7 @@ typedef struct _Condition {
                        // 1时，操作符右边是属性名，0时，是属性值
   RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value right_value;   // right-hand side value if right_is_attr = FALSE
-  int has_not;         // CompOp前是否有NOT限定词
+  int is_and;          // 是and还是or
 } Condition;
 
 // struct of select

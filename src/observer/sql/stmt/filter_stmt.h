@@ -93,6 +93,11 @@ public:
     }
   }
 
+  const std::vector<FilterUnit *> &sub_select_units() const
+  {
+    return sub_select_units_;
+  }
+
 public:
   static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
 			const Condition *conditions, int condition_num,
@@ -104,4 +109,5 @@ public:
 private:
   std::unordered_map<std::string, std::vector<FilterUnit *>> single_filter_units_;
   std::vector<FilterUnit *>  filter_units_; // 默认当前都是AND关系
+  std::vector<FilterUnit *> sub_select_units_;
 };

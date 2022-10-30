@@ -38,13 +38,33 @@ public:
   TupleCellSpec() = default;
   TupleCellSpec(Expression *expr) : expression_(expr)
   {}
+  TupleCellSpec(const TupleCellSpec& spec){
+    alias_=spec.alias_;
+    //拷贝函数 要创建新的表达式指针
+    if(spec.expression()){
+      if(spec.expression()->type()==ExprType::FIELD){
+        this->expression_=std::unique_ptr<Expression>(new FieldExpr(*(FieldExpr*)spec.expression()));
+      }else if(spec.expression()->type()==ExprType::VALUE){
+        this->expression_=std::unique_ptr<Expression>(new ValueExpr(*(ValueExpr*)spec.expression()));
+      }
+    }
+  }
+  TupleCellSpec& operator=(const TupleCellSpec &spec)
+	{
+    alias_=spec.alias_;
+    if(spec.expression()){
+      if(spec.expression()->type()==ExprType::FIELD){
+        this->expression_=std::unique_ptr<Expression>(new FieldExpr(*(FieldExpr*)spec.expression()));
+      }else if(spec.expression()->type()==ExprType::VALUE){
+        this->expression_=std::unique_ptr<Expression>(new ValueExpr(*(ValueExpr*)spec.expression()));
+      }
+    }
+		return *this;
+	}
 
   ~TupleCellSpec()
   {
-    if (expression_) {
-      delete expression_;
-      expression_ = nullptr;
-    }
+
   }
   void set_table_name(const char *table_name) {
     this->table_name_ = table_name;
@@ -63,13 +83,13 @@ public:
 
   Expression *expression() const
   {
-    return expression_;
+    return expression_.get();
   }
 
 private:
   const char *alias_ = nullptr;
   const char *table_name_ = nullptr;
-  Expression *expression_ = nullptr;
+  std::unique_ptr<Expression> expression_;
 };
 
 class Tuple
@@ -90,12 +110,23 @@ class RowTuple : public Tuple
 {
 public:
   RowTuple() = default;
+  RowTuple(const RowTuple &tuple) {
+    this->record_ = tuple.record_;
+    this->table_ = tuple.table_;
+    this->speces_ = tuple.speces_;
+  }
+  RowTuple& operator=(const RowTuple &tuple) {
+    this->record_ = tuple.record_;
+    this->table_ = tuple.table_;
+    this->speces_ = tuple.speces_;
+    return *this;
+  }
   virtual ~RowTuple()
   {
-    for (TupleCellSpec *spec : speces_) {
-      delete spec;
-    }
-    speces_.clear();
+    // for (TupleCellSpec *spec : speces_) {
+    //   delete spec;
+    // }
+    // speces_.clear();
   }
   
   void set_record(Record *record)
@@ -150,7 +181,6 @@ public:
       cell.set_data(text_data);
       cell.set_length(strlen(text_data));
     } else {
-      // TODO(vanish): 添加NULL类型时，这里可能需要修改
       cell.set_data(this->record_->data() + field_meta->offset());
       cell.set_length(field_meta->len());
     }
@@ -169,7 +199,7 @@ public:
       const FieldExpr * field_expr = (const FieldExpr *)speces_[i]->expression();
       const Field &field = field_expr->field();
       if (0 == strcmp(field_name, field.field_name())) {
-	return cell_at(i, cell);
+	      return cell_at(i, cell);
       }
     }
     return RC::NOTFOUND;
@@ -208,7 +238,7 @@ public:
   CompositeTuple() = default;
   virtual ~CompositeTuple()
   {
-    table2tuple_.clear();
+    tuples_.clear();
     speces_.clear();
   }
 
@@ -221,25 +251,31 @@ public:
   }
   
   void clear_tuple() {
-    table2tuple_.clear();
+    tuples_.clear();
   }
 
   // 这样做是为了使children既可以是CrossProductOperator也可以是predicate
-  void set_tuple(Tuple *tuple) {
-    if (tuple->type() == TupleType::ROW) {
+
+  void add_tuple(Tuple *tuple) {
+    // assert(tuple->type() == TupleType::ROW);
+    if (tuple->type() == TupleType::COMPOSITE) {
+      CompositeTuple *comp_tuple = static_cast<CompositeTuple *>(tuple);
+      
+      tuples_.insert(tuples_.end(), comp_tuple->tuples_.begin(), comp_tuple->tuples_.end());
+    } else if (tuple->type() == TupleType::ROW) {
+      // RowTuple 
       RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-      const char *table_name = row_tuple->table_name();
-      table2tuple_[std::string(table_name)] = tuple;
-    } else if (tuple->type() == TupleType::COMPOSITE){
-      table2tuple_ = static_cast<CompositeTuple *>(tuple)->table2tuple_; 
+      Record *new_record = new Record(row_tuple->record());
+      row_tuple->set_record(new_record);
+      std::shared_ptr<RowTuple> new_row_tuple = std::make_shared<RowTuple>(*row_tuple);
+      tuples_.emplace_back(new_row_tuple);
     }
+    
   }
 
-  void add_tuple(const char* table_name, Tuple *tuple) {
-    assert(tuple->type() == TupleType::ROW);
-    table2tuple_[std::string(table_name)] = tuple;
+  void remove_tuple() {
+    tuples_.pop_back();
   }
-
   // 在调用ProjectTuple的set_tuple方法时，
   // 每次获取一个CompositeTuple时，都需要调用该方法
   void set_speces(std::vector<TupleCellSpec *> &speces) {
@@ -263,12 +299,14 @@ public:
   // 1. 通过Field获取对应的表，在通过表获取对应的子Tuple
   // 2. 调用子tuple的find_cell方法，获取TupleCell结果
   RC find_cell(const Field &field, TupleCell &cell) const override {
-      // 获取表名
-      auto iter = table2tuple_.find(std::string(field.table_name()));
-      if (iter != table2tuple_.end()) {
-        return iter->second->find_cell(field, cell);
+    // 获取表名
+    RC rc = SUCCESS;
+    for (auto tuple: tuples_) {
+      if (RC::SUCCESS == (rc = tuple->find_cell(field, cell))) {
+        return rc;
       }
-      return RC::INVALID_ARGUMENT;
+    }
+    return RC::NOTFOUND;
   }
 
   RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
@@ -283,7 +321,7 @@ public:
   
     
 private:
-  std::unordered_map<std::string, Tuple *> table2tuple_;
+  std::vector<std::shared_ptr<RowTuple>> tuples_;
   std::vector<TupleCellSpec *> speces_;
 };
 

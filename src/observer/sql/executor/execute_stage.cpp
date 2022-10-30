@@ -432,6 +432,127 @@ IndexScanOperator *try_to_create_index_scan_operator(std::vector<FilterUnit *> &
   return oper;
 }
 
+// 子查询先执行完毕后，更新filter_stmt->sub_select_units中对应的TupleCell
+RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
+  RC rc = RC::SUCCESS;
+
+  FilterStmt *filter_stmt = select_stmt->filter_stmt();
+  std::vector<FilterUnit *> single_filter_units;
+  std::vector<Operator *> scan_oper_list;
+  std::vector<PredicateOperator *> pred_oper_list;
+  std::vector<CrossProductOperator *> cross_oper_list;
+
+  for (auto table: select_stmt->tables()) {
+    filter_stmt->single_filter_units(table->name(), single_filter_units);
+
+    Operator *scan_oper = try_to_create_index_scan_operator(single_filter_units);
+    if (nullptr == scan_oper) {
+      scan_oper = new TableScanOperator(table);
+    }
+    PredicateOperator *pred_oper = new PredicateOperator(single_filter_units);
+    pred_oper->add_child(scan_oper);
+    pred_oper_list.push_back(pred_oper);
+    single_filter_units.clear();
+  }
+
+  for (int i=1; i<pred_oper_list.size() ; i++) {
+    CrossProductOperator *cross_oper = new CrossProductOperator(filter_stmt->filter_units());
+    if (i == 1) {
+      cross_oper->add_child(pred_oper_list[0]);
+    } else {
+      cross_oper->add_child(cross_oper_list.back());
+    }
+    cross_oper->add_child(pred_oper_list[i]);
+    cross_oper_list.emplace_back(cross_oper);
+  }
+
+  for (size_t i=0; i < select_stmt->sub_select_stmts().size(); i++) {
+    rc = do_sub_select(select_stmt->sub_select_stmts()[i], filter_stmt->sub_select_units()[0]);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
+
+
+  ProjectOperator *project_oper = new ProjectOperator();
+  if (cross_oper_list.empty()) {
+    return RC::GENERIC_ERROR;
+  }
+  project_oper->add_child(cross_oper_list.back());
+
+  for (const Field &field : select_stmt->query_fields()) {
+    project_oper->add_projection(field.table(), field.meta());
+  }
+  CompOp comp = filter_unit->comp();
+  Expression *left = filter_unit->left();
+  Expression *right = filter_unit->right();
+  bool in_or_exists = (comp == CompOp::IN_OP 
+                       || comp == CompOp::NOT_IN_OP 
+                       || comp == CompOp::EXISTS_OP 
+                       || comp == CompOp::NOT_EXISTS_OP);
+  if (select_stmt->is_agg()) {
+    if (in_or_exists) {
+      return RC::GENERIC_ERROR;
+    }
+    AggregateOperator *agg_oper = new AggregateOperator(select_stmt->rel_attrs(), select_stmt->query_fields());
+    agg_oper->add_child(project_oper);
+    agg_oper->open();
+    if (left->type() == ExprType::VALUE) {
+      Value res = agg_oper->get_result(select_stmt->query_fields()[0]);
+      delete left;
+      left = nullptr;
+      Expression *new_left = new ValueExpr(res);
+      filter_unit->set_left(new_left);
+    } else {
+      Value res = agg_oper->get_result(select_stmt->query_fields()[0]);
+      delete right;
+      right = nullptr;
+      Expression *new_right = new ValueExpr(res);
+      filter_unit->set_right(new_right);
+    }
+    return RC::SUCCESS;
+  }
+  if (!in_or_exists || (comp != CompOp::EXISTS_OP 
+                      && comp != CompOp::NOT_EXISTS_OP
+                      && select_stmt->query_fields().size() > 1)) {
+
+    return RC::GENERIC_ERROR;
+  }
+  project_oper->open();
+  while ((rc = project_oper->next()) == RC::SUCCESS) {
+  }
+  if (rc != RC::RECORD_EOF) {
+    return rc;
+  }
+  if (left->type() == ExprType::VALUE) {
+    Field field;
+    if (comp != CompOp::EXISTS_OP && comp != CompOp::NOT_EXISTS_OP) {
+      field = select_stmt->query_fields()[0];
+    } else {
+      field = ((FieldExpr *)right)->field();
+    }
+    Value res = project_oper->get_result(field);
+    delete left;
+    left = nullptr;
+    Expression *new_left = new ValueExpr(res);
+    filter_unit->set_left(new_left);
+  } else {
+    Field field;
+    if (comp != CompOp::EXISTS_OP && comp != CompOp::NOT_EXISTS_OP) {
+      field = select_stmt->query_fields()[0];
+    } else {
+      field = ((FieldExpr *)left)->field();
+    }
+    Value res = project_oper->get_result(field);
+    delete right;
+    right = nullptr;
+    Expression *new_right = new ValueExpr(res);
+    filter_unit->set_right(new_right);
+  }
+  return RC::SUCCESS;
+}
+
+
 RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 {
   SelectStmt *select_stmt = (SelectStmt *)(sql_event->stmt());
@@ -468,6 +589,14 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     cross_oper_list.emplace_back(cross_oper);
   }
 
+  for (size_t i=0; i < select_stmt->sub_select_stmts().size(); i++) {
+    rc = do_sub_select(select_stmt->sub_select_stmts()[i], filter_stmt->sub_select_units()[0]);
+    if (rc != RC::SUCCESS) {
+      session_event->set_response("FAILURE\n");
+      return rc;
+    }
+  }
+
   DEFER([&]() { 
     for (int i=0; i<scan_oper_list.size(); i++) {
       delete scan_oper_list[i]; 
@@ -498,8 +627,6 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     agg_oper.add_child(&project_oper);
     agg_oper.open();
     std::stringstream ss;
-    while ((rc = agg_oper.next()) == RC::SUCCESS) {
-    }
     agg_oper.print_header(ss);
     agg_oper.to_string(ss);
     ss << std::endl;
@@ -533,6 +660,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 
     tuple_to_string(ss, *tuple);
     ss << std::endl;
+    printf("%s", ss.str().c_str());
   }
 
   if (rc != RC::RECORD_EOF) {

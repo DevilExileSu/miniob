@@ -159,18 +159,10 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
           return rc;
         }
         std::stringstream ss;
-        while ((rc = agg_oper.next()) == RC::SUCCESS) {
-        }
         // 返回聚合结果
         agg_oper.to_string(ss);
-        if (rc != RC::RECORD_EOF) {
-          LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
-          agg_oper.close();
+        if ((rc = agg_oper.close()) != RC::SUCCESS) {
           return rc;
-        } else {
-          if ((rc = agg_oper.close()) != RC::SUCCESS) {
-            return rc;
-          }
         }
         value_destroy(value);
         if (agg_oper.is_null(0)) {

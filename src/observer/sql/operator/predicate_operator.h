@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include "sql/operator/operator.h"
+#include "sql/parser/parse_defs.h"
 
 class FilterUnit;
 
@@ -36,6 +37,11 @@ public:
   RC next() override;
   RC close() override;
 
+  Value get_result(Field field) override{
+    Value res;
+    value_init_null(&res);
+    return res;
+  }
   Tuple * current_tuple() override;
   //int tuple_cell_num() const override;
   //RC tuple_cell_spec_at(int index, TupleCellSpec &spec) const override;

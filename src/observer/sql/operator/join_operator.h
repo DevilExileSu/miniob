@@ -30,7 +30,11 @@ public:
   RC open() override;
   RC next() override;
   RC close() override;
-
+  Value get_result(Field field) override{
+    Value res;
+    value_init_null(&res);
+    return res;
+  }
 private:
   Operator *left_ = nullptr;
   Operator *right_ = nullptr;

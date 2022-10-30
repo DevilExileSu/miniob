@@ -84,11 +84,14 @@ public:
     if (value.type == CHARS) {
       tuple_cell_.set_length(strlen((const char *)value.data));
     }
+    if (value.type == SETS || value.type == TUPLESET) {
+      tuple_cell_.set_length(value.set_size);
+    }
   }
 
   virtual ~ValueExpr() = default;
 
-  RC get_value(const Tuple &tuple, TupleCell & cell) const override;
+  RC get_value(const Tuple &tuple, TupleCell &cell) const override;
   ExprType type() const override
   {
     return ExprType::VALUE;

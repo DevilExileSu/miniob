@@ -183,9 +183,9 @@ void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr
 {
   condition->comp = comp;
   condition->left_is_attr = left_is_attr;
-  if (left_is_attr) {
+  if (left_is_attr == 1) {
     condition->left_attr = *left_attr;
-  } else {
+  } else if (left_is_attr == 0){
     condition->left_value = *left_value;
   }
 

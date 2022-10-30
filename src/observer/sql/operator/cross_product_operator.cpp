@@ -13,13 +13,8 @@ RC CrossProductOperator::open() {
   RC rc = children_[1]->open();
   while (RC::SUCCESS == (rc = children_[1]->next())) {
     Tuple *right_tuple = children_[1]->current_tuple();
-    if (right_table_name_ == nullptr) {
-      RowTuple *row_tuple = static_cast<RowTuple *>(right_tuple);
-      right_table_name_ = row_tuple->table_name();
-    }
     buffer_tuple_.emplace_back(right_tuple);
   }
-
   children_[1]->close();
   return children_[0]->open();
 }
@@ -50,17 +45,15 @@ RC CrossProductOperator::next()
     LOG_WARN("failed to get tuple from operator");
     return rc;
   }
-
-  // 右表为空
+  
   if (buffer_tuple_.empty()) {
     rc = RC::INTERNAL;
     return rc;
   }
 
   CompositeTuple composite_tuple;
-  composite_tuple.set_tuple(left_tuple);
-
-
+  composite_tuple.add_tuple(left_tuple);
+  
   if (right_cursor_ == 0 || right_cursor_ == buffer_tuple_.size()) {
     if (right_cursor_ == buffer_tuple_.size()) {
       right_cursor_ = 0;
@@ -72,7 +65,7 @@ RC CrossProductOperator::next()
       }
       children_[1]->open();
       composite_tuple.clear_tuple();
-      composite_tuple.set_tuple(left_oper->current_tuple());
+      composite_tuple.add_tuple(left_oper->current_tuple());
     } else {
       if ((rc = children_[1]->open()) != RC::SUCCESS) {
         return rc;
@@ -83,13 +76,15 @@ RC CrossProductOperator::next()
   while (RC::SUCCESS == (rc = children_[1]->next())) {
     Tuple *right_tuple = children_[1]->current_tuple();
     ++right_cursor_;
-    composite_tuple.add_tuple(right_table_name_, right_tuple);
 
+    composite_tuple.add_tuple(right_tuple);
+    
     if (do_predicate(composite_tuple)) {
         tuple_ = composite_tuple;
+        tuple_set_.push_back(composite_tuple);
         return rc;
     }
-
+    composite_tuple.remove_tuple();
     if (right_cursor_ == buffer_tuple_.size()) {
       right_cursor_ = 0;
       children_[1]->close();
@@ -100,7 +95,7 @@ RC CrossProductOperator::next()
       }
       children_[1]->open();
       composite_tuple.clear_tuple();
-      composite_tuple.set_tuple(left_oper->current_tuple());
+      composite_tuple.add_tuple(left_oper->current_tuple());
     }
   }
 
@@ -190,10 +185,11 @@ bool CrossProductOperator::do_predicate(CompositeTuple &tuple)
       filter_result = !like_match(left_cell.data(), right_cell.data());
     } break;
     case IN_OP: {
-      filter_result = false;
+      // filter_result = false;
+      filter_result = (0 == compare);
     } break;
     case NOT_IN_OP: {
-      filter_result = false;
+      filter_result = (0 != compare);
     } break;
     default: {
       LOG_WARN("invalid compare type: %d", comp);

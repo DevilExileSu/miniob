@@ -22,6 +22,11 @@ public:
   Tuple * current_tuple() override {
     return nullptr;
   }
+  Value get_result(Field field) override{
+    Value res;
+    value_init_null(&res);
+    return res;
+  }
   //int tuple_cell_num() const override
   //RC tuple_cell_spec_at(int index, TupleCellSpec &spec) const override
 private:

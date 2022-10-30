@@ -173,6 +173,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <attr1> agg;
 %type <number> number;
 %type <number> nullable;
+%type <number> comOp;
 %type <string> alias_ID;
 
 %%
@@ -699,7 +700,7 @@ condition:
 			Value *right_value = &CONTEXT->values[--CONTEXT->value_length];
 
 			Condition condition;
-			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
+			condition_init(&condition, $2, 1, &left_attr, NULL, 0, NULL, right_value);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 			// $$ = ( Condition *)malloc(sizeof( Condition));
 			// $$->left_is_attr = 1;
@@ -718,7 +719,7 @@ condition:
 			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
 			CONTEXT->value_length -= 2;
 			Condition condition;
-			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 0, NULL, right_value);
+			condition_init(&condition, $2, 0, NULL, left_value, 0, NULL, right_value);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 			// $$ = ( Condition *)malloc(sizeof( Condition));
 			// $$->left_is_attr = 0;
@@ -740,7 +741,7 @@ condition:
 			relation_attr_init(&right_attr, NULL, $3);
 
 			Condition condition;
-			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			condition_init(&condition, $2, 1, &left_attr, NULL, 1, &right_attr, NULL);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 			// $$=( Condition *)malloc(sizeof( Condition));
 			// $$->left_is_attr = 1;
@@ -759,7 +760,7 @@ condition:
 			relation_attr_init(&right_attr, NULL, $3);
 
 			Condition condition;
-			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
+			condition_init(&condition, $2, 0, NULL, left_value, 1, &right_attr, NULL);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 			// $$=( Condition *)malloc(sizeof( Condition));
 			// $$->left_is_attr = 0;
@@ -780,7 +781,7 @@ condition:
 			Value *right_value = &CONTEXT->values[--CONTEXT->value_length];
 
 			Condition condition;
-			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
+			condition_init(&condition, $4, 1, &left_attr, NULL, 0, NULL, right_value);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 			// $$=( Condition *)malloc(sizeof( Condition));
 			// $$->left_is_attr = 1;
@@ -801,7 +802,7 @@ condition:
 			relation_attr_init(&right_attr, $3, $5);
 
 			Condition condition;
-			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
+			condition_init(&condition, $2, 0, NULL, left_value, 1, &right_attr, NULL);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 			// $$=( Condition *)malloc(sizeof( Condition));
 			// $$->left_is_attr = 0;//属性值
@@ -822,7 +823,7 @@ condition:
 			relation_attr_init(&right_attr, $5, $7);
 
 			Condition condition;
-			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			condition_init(&condition, $4, 1, &left_attr, NULL, 1, &right_attr, NULL);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 			// $$=( Condition *)malloc(sizeof( Condition));
 			// $$->left_is_attr = 1;		//属性
@@ -842,7 +843,7 @@ condition:
 		value_init_set(&right_value, CONTEXT->values, CONTEXT->cursor_value[CONTEXT->depth], CONTEXT->value_length - CONTEXT->cursor_value[CONTEXT->depth]);
 		Condition condition;
 
-		condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, &right_value);
+		condition_init(&condition, $2, 1, &left_attr, NULL, 0, NULL, &right_value);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		/// 复原同一深度的cursor_value[]，防止和同一深度其他的SETS类型value冲突
 		CONTEXT->value_length = CONTEXT->cursor_value[CONTEXT->depth - 1];
@@ -854,7 +855,7 @@ condition:
 		value_init_set(&right_value, CONTEXT->values, CONTEXT->cursor_value[CONTEXT->depth], CONTEXT->value_length - CONTEXT->cursor_value[CONTEXT->depth]);
 		Condition condition;
 
-		condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, &right_value);
+		condition_init(&condition, $4, 1, &left_attr, NULL, 0, NULL, &right_value);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		CONTEXT->value_length = CONTEXT->cursor_value[CONTEXT->depth - 1];
 	}
@@ -867,7 +868,7 @@ condition:
 		value_init_select(&right_value, &CONTEXT->selections[CONTEXT->select_num - 1]);
 		Condition condition;
 
-		condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, &right_value);
+		condition_init(&condition, $2, 1, &left_attr, NULL, 0, NULL, &right_value);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		CONTEXT->value_length = CONTEXT->cursor_value[CONTEXT->depth - 1];
 	}
@@ -878,27 +879,61 @@ condition:
 		value_init_select(&right_value, &CONTEXT->selections[CONTEXT->select_num - 1]);
 		Condition condition;
 
-		condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, &right_value);
+		condition_init(&condition, $4, 1, &left_attr, NULL, 0, NULL, &right_value);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		CONTEXT->value_length = CONTEXT->cursor_value[CONTEXT->depth - 1];
+	}
+	| LBRACE select_clause RBRACE comOp ID {
+	    RelAttr right_attr;
+		relation_attr_init(&right_attr, NULL, $5);
+		Value left_value;
+		value_init_select(&left_value, &CONTEXT->selections[CONTEXT->select_num - 1]);
+		Condition condition;
+
+		condition_init(&condition, $4, 0, NULL, &left_value, 1, &right_attr, NULL);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		CONTEXT->value_length = CONTEXT->cursor_value[CONTEXT->depth - 1];
+	}
+	| LBRACE select_clause RBRACE comOp ID DOT ID   {
+		RelAttr right_attr;
+		relation_attr_init(&right_attr, $5, $7);
+		Value left_value;
+		value_init_select(&left_value, &CONTEXT->selections[CONTEXT->select_num - 1]);
+		Condition condition;
+
+		condition_init(&condition, $4, 0, NULL, &left_value, 1, &right_attr, NULL);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		CONTEXT->value_length = CONTEXT->cursor_value[CONTEXT->depth - 1];
+	}
+	| comOp LBRACE select_clause RBRACE {
+		if ($1 != EXISTS_OP && $1 != NOT_EXISTS_OP) {
+			CONTEXT->ssql->flag = SCF_INVALID_DATE;
+			yyresult = 2;
+			goto yyreturn;
+		}
+		Value right_value;
+		value_init_select(&right_value, &CONTEXT->selections[CONTEXT->select_num - 1]);
+		Condition condition;
+		condition_init(&condition, $1, -1, NULL, NULL, 0, NULL, &right_value);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 	}
     ;
 
 comOp:
-  	  EQ { CONTEXT->comp = EQUAL_TO; }
-    | LT { CONTEXT->comp = LESS_THAN; }
-    | GT { CONTEXT->comp = GREAT_THAN; }
-    | LE { CONTEXT->comp = LESS_EQUAL; }
-    | GE { CONTEXT->comp = GREAT_EQUAL; }
-    | NE { CONTEXT->comp = NOT_EQUAL; }
-	| LIKE { CONTEXT->comp = LIKE_MATCH; }
-	| NOT LIKE { CONTEXT->comp = NOT_LIKE; }
-	| IN { CONTEXT->comp = IN_OP; }
-	| NOT IN { CONTEXT->comp = NOT_IN_OP; }
-	| EXIST { CONTEXT->comp =EXISTS_OP; }
-	| NOT EXIST { CONTEXT->comp = NOT_EXISTS_OP; }
-	| IS { CONTEXT->comp = IS_OP; }
-	| IS NOT { CONTEXT->comp = IS_NOT_OP; }
+  	  EQ { $$ = EQUAL_TO; }
+    | LT { $$ = LESS_THAN; }
+    | GT { $$ = GREAT_THAN; }
+    | LE { $$ = LESS_EQUAL; }
+    | GE { $$ = GREAT_EQUAL; }
+    | NE { $$ = NOT_EQUAL; }
+	| LIKE { $$ = LIKE_MATCH; }
+	| NOT LIKE { $$ = NOT_LIKE; }
+	| IN { $$ = IN_OP; }
+	| NOT IN { $$ = NOT_IN_OP; }
+	| EXIST { $$ =EXISTS_OP; }
+	| NOT EXIST { $$ = NOT_EXISTS_OP; }
+	| IS { $$ = IS_OP; }
+	| IS NOT { $$ = IS_NOT_OP; }
     ;
 
 load_data:

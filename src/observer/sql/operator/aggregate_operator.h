@@ -137,8 +137,43 @@ public:
   RC next() override;
   RC close() override;
 
-  // 调用current_tuple时，直接传递ProjectOperator当前的tuple
-  Tuple * current_tuple() override;
+  Value get_result(Field field) override{
+    Value res;
+    // 作为子查询的返回结果
+    if (rel_attrs_.size() > 1 || is_null(0)) {
+      value_init_null(&res);
+      return res;
+    } 
+    switch (rel_attrs_[0].agg_func) {
+      case MAX: {
+        value_init_string(&res, stat_[0].max().c_str());
+      } break;
+      case MIN: {
+        value_init_string(&res, stat_[0].min().c_str());
+      } break;
+      case AVG: {
+        value_init_float(&res, stat_[0].avg());
+      } break;
+      case COUNT: {
+        if (0 == strcmp(rel_attrs_[0].attribute_name, "*")) {
+          value_init_integer(&res, stat_[0].count());
+        } else {
+          value_init_integer(&res, stat_[0].not_null_count());
+        }
+      } break;
+      case SUM: {
+        value_init_float(&res, stat_[0].sum());
+      } break; 
+      default: {
+        value_init_null(&res);
+      } break;
+    }
+    return res; 
+  }
+
+  Tuple * current_tuple() override {
+    return nullptr;
+  }
 
   void print_header(std::ostream &os);
   void to_string(std::ostream &os);

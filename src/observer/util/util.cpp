@@ -125,9 +125,14 @@ int check_prefix(std::string v) {
 
 
  RC convert(const FieldMeta *field_meta, Value *value, bool &has_text) {
-    const AttrType value_type = value->type;
-    if (field_meta->type() != value_type) {
-      switch (field_meta->type()) {
+  return convert(field_meta->type(), value, has_text);
+ }
+
+
+  RC convert(AttrType type, Value *value, bool &has_text) {
+    AttrType value_type = value->type;
+    if (type != value_type) {
+      switch (type) {
         case INTS:
           switch (value_type) {
             case FLOATS: {
@@ -144,7 +149,7 @@ int check_prefix(std::string v) {
               break;
             }
             default:
-              LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_meta->type());
+              LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, type);
               return RC::SCHEMA_FIELD_TYPE_MISMATCH;
           }
           break;
@@ -163,7 +168,7 @@ int check_prefix(std::string v) {
               break;
             }
             default:
-              LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_meta->type());
+              LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, type);
               return RC::SCHEMA_FIELD_TYPE_MISMATCH;
           }
           break;
@@ -182,7 +187,7 @@ int check_prefix(std::string v) {
               break;
             }
             default:
-              LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_meta->type());
+              LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, type);
               return RC::SCHEMA_FIELD_TYPE_MISMATCH;
           }
           break;
@@ -209,13 +214,13 @@ int check_prefix(std::string v) {
               break;
             }
             default:
-              LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_meta->type());
+              LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, type);
               return RC::SCHEMA_FIELD_TYPE_MISMATCH;
           }
           break;
         
         default:
-          LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, field_meta->type());
+          LOG_WARN("schema mismatch. value type=%d, field type in schema=%d", value_type, type);
           return RC::SCHEMA_FIELD_TYPE_MISMATCH;
       }
     }

@@ -2,6 +2,7 @@
 
 #include "sql/operator/operator.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/parser/parse_defs.h"
 
 class FilterUnit;
 
@@ -13,7 +14,6 @@ public:
   {}
 
   virtual ~CrossProductOperator() = default;
-
   RC open() override;
   RC next() override;
   RC close() override;
@@ -21,13 +21,28 @@ public:
   // 这里的current_tuple是一个CompositeTuple
   Tuple * current_tuple() override;
 
+  Value get_result(Field field) override {
+    Value value;
+    Value values[tuple_set_.size()];
+    for (size_t i=0; i<tuple_set_.size(); i++) {
+      TupleCell cell;
+      tuple_set_[i].find_cell(field, cell);
+      values[i].data = (TupleCell *)malloc(sizeof(TupleCell));
+      values[i].type = cell.attr_type();
+      memcpy(values[i].data, &cell, sizeof(TupleCell));
+    }
+    value_init_set(&value, values, 0, tuple_set_.size());
+    value.type = AttrType::TUPLESET;
+    return value;
+  }
+
 private:
   bool do_predicate(CompositeTuple &tuple);
 private:
   const std::vector<FilterUnit *> filter_units_;
   std::vector<Tuple *> buffer_tuple_;
+  std::vector<CompositeTuple> tuple_set_;
   CompositeTuple tuple_;
-  const char *right_table_name_ = nullptr;
   int right_cursor_ = 0;        // 记录上次遍历到的buffer_tuple_的游标
   int left_cursor_ = 0;
 };

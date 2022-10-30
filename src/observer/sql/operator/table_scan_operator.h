@@ -34,7 +34,11 @@ public:
   RC close() override;
 
   Tuple * current_tuple() override;
-
+  Value get_result(Field field) override{
+    Value res;
+    value_init_null(&res);
+    return res;
+  }
   // int tuple_cell_num() const override
   // {
   //   return tuple_.cell_num();

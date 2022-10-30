@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include "sql/operator/operator.h"
+#include "sql/parser/parse_defs.h"
 #include "rc.h"
 
 class ProjectOperator : public Operator
@@ -36,6 +37,9 @@ public:
     return tuple_.cell_num();
   }
 
+  Value get_result(Field field) override{
+    return children_[0]->get_result(field);
+  }
   RC tuple_cell_spec_at(int index, const TupleCellSpec *&spec) const;
 
   Tuple * current_tuple() override;

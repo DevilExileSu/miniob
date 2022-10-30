@@ -107,3 +107,6 @@ select * from ssq_1 where col1 in (select * from ssq_2);
 FAILURE
 select * from ssq_1 where col1 not in (select * from ssq_2);
 FAILURE
+
+
+select * from ssq_1 where not exists (select * from ssq_2 where ssq_2.id > ssq_1.id);

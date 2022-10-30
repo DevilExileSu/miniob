@@ -26,6 +26,10 @@ SelectStmt::~SelectStmt()
     delete filter_stmt_;
     filter_stmt_ = nullptr;
   }
+  for (size_t i = 0; i < select_stmts_.size(); i++) {
+    delete select_stmts_[i];
+    select_stmts_[i] = nullptr;
+  }
 }
 
 static void wildcard_fields(Table *table, std::vector<Field> &field_metas, bool is_agg)
@@ -165,6 +169,36 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   if (!tables.empty()) {
     default_table = tables[0];
   }
+  std::vector<SelectStmt *> sub_select_stmt;
+  for (size_t i=0; i<select_sql.condition_num; i++) {
+    RC rc = RC::SUCCESS;
+    if (select_sql.conditions[i].left_is_attr == 0 && select_sql.conditions[i].left_value.type == AttrType::SELECTS) {
+      Selects select = *(Selects *)select_sql.conditions[i].left_value.data;
+      // 将父查询中的涉及到的表 添加到 子查询中
+      for (size_t i = 0; i < select_sql.relation_num; i++) {
+        select.relations[select.relation_num] = select_sql.relations[i];
+        select.alias[select.relation_num++] = select_sql.alias[i];
+      } 
+      Stmt *sub_stmt = nullptr;
+      rc = SelectStmt::create(db, select, sub_stmt);
+      SelectStmt *select_stmt = static_cast<SelectStmt *>(sub_stmt);
+      sub_select_stmt.emplace_back(select_stmt);
+    } else if (select_sql.conditions[i].right_is_attr == 0 && select_sql.conditions[i].right_value.type == AttrType::SELECTS) {
+      Selects select = *(Selects *)select_sql.conditions[i].right_value.data;
+      // 将父查询中的涉及到的表 添加到 子查询中
+      for (size_t i = 0; i < select_sql.relation_num; i++) {
+        select.relations[select.relation_num] = select_sql.relations[i];
+        select.alias[select.relation_num++] = select_sql.alias[i];
+      }  
+      Stmt *sub_stmt = nullptr;
+      rc = SelectStmt::create(db, select, sub_stmt); 
+      SelectStmt *select_stmt = static_cast<SelectStmt *>(sub_stmt);
+      sub_select_stmt.emplace_back(select_stmt);
+    }
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
 
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
@@ -181,6 +215,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->rel_attrs_.swap(rel_attrs); 
+  select_stmt->select_stmts_.swap(sub_select_stmt);
   select_stmt->filter_stmt_ = filter_stmt;
   stmt = select_stmt;
   return RC::SUCCESS;

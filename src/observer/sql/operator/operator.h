@@ -32,7 +32,7 @@ public:
   virtual RC open() = 0;
   virtual RC next() = 0;
   virtual RC close() = 0;
-
+  virtual Value get_result(Field field) = 0;
   virtual Tuple * current_tuple() = 0;
   //virtual int tuple_cell_num() const = 0;
   //virtual RC  tuple_cell_spec_at(int index, TupleCellSpec *&spec) const = 0;

@@ -18,43 +18,33 @@ RC AggregateOperator::open()
     LOG_WARN("failed to open child operator: %s", strrc(rc));
     return rc;
   }
-
-  return RC::SUCCESS;
+  rc = RC::SUCCESS;
+  while (RC::SUCCESS == (rc = children_[0]->next())) {
+    Tuple *tuple = children_[0]->current_tuple();
+    if (tuple == nullptr) {
+        return RC::INTERNAL;
+    }
+    for (int i=0; i< rel_attrs_.size(); i++) {
+        if (rel_attrs_[i].attribute_name == nullptr) {
+            continue;
+        }
+        TupleCell cell;
+        tuple->find_cell(query_fields_[rel_attrs_.size() - i - 1], cell);
+        stat_[i].add_tuple(cell);
+    }
+  }
+  return rc;
 }
 
 RC AggregateOperator::next()
 {
-    RC rc = children_[0]->next();
-    if (RC::SUCCESS != rc) {
-        return rc;
-    }
-    if (!rel_attrs_.empty()) {
-        Tuple *tuple = children_[0]->current_tuple();
-        if (tuple == nullptr) {
-            return RC::INTERNAL;
-        }
-        for (int i = 0; i < rel_attrs_.size(); i++) {
-            if (rel_attrs_[i].attribute_name == nullptr) {
-                continue;
-            }
-            TupleCell cell;
-            tuple->find_cell(query_fields_[rel_attrs_.size() - i - 1], cell);
-            stat_[i].add_tuple(cell);
-        }
-    }
-    return rc;
+    return RC::RECORD_EOF; 
 }
 
 RC AggregateOperator::close()
 {
     children_[0]->close();
     return RC::SUCCESS;
-}
-
-Tuple *AggregateOperator::current_tuple()
-{
-    return children_[0]->current_tuple();
-   
 }
 
 void AggregateOperator::print_header(std::ostream &os) {
