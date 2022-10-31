@@ -917,6 +917,17 @@ condition:
 		condition_init(&condition, $1, -1, NULL, NULL, 0, NULL, &right_value);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 	}
+	| LBRACE select_clause RBRACE comOp LBRACE select_clause RBRACE {
+		Value left_value;
+		value_init_select(&left_value, &CONTEXT->selections[CONTEXT->select_num - 2]);
+		Value right_value;
+		value_init_select(&right_value, &CONTEXT->selections[CONTEXT->select_num - 1]);
+		Condition condition;
+
+		condition_init(&condition, $4, 0, NULL, &left_value, 0, NULL, &right_value);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		CONTEXT->value_length = CONTEXT->cursor_value[CONTEXT->depth - 1];
+	}
     ;
 
 comOp:
