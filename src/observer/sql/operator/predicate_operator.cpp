@@ -143,10 +143,10 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         rc = convert(left_cell.attr_type(), value, has_text);
         if (rc != RC::SUCCESS) {
           filter_result = false;
-          break;
         }
         if (0 == memcmp(left_data, value->data, data_len)) {
           filter_result = true;
+          break; 
         }
       }
     } break;
@@ -181,10 +181,6 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         Value *value = (Value *)(right_data + i * sizeof(Value));
         // 先进行类型转换
         rc = convert(left_cell.attr_type(), value, has_text);
-        if (rc != RC::SUCCESS) {
-          filter_result = false;
-          break;
-        }
         if (0 == memcmp(left_data, value->data, data_len)) {
           filter_result = false;
           break;
