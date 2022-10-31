@@ -113,10 +113,6 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     } break;
     case EXISTS_OP:
     case IN_OP: {
-      if (has_null) {
-        filter_result = false; 
-        break;
-      }
       char *left_data = nullptr;
       char *right_data = nullptr;
       int set_len = 0;
@@ -139,11 +135,14 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
       bool has_text = false;
       for (int i=0; i < set_len; i++) {
         Value *value = (Value *)(right_data + i * sizeof(Value));
-        // 先进行类型转换
+        if (value->type == AttrType::NULL_) {
+          filter_result = false;
+          break;
+        }
         rc = convert(left_cell.attr_type(), value, has_text);
         if (rc != RC::SUCCESS) {
           filter_result = false;
-          continue;
+          break;
         }
         if (0 == memcmp(left_data, value->data, data_len)) {
           filter_result = true;
@@ -153,10 +152,6 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     } break;
     case NOT_EXISTS_OP:
     case NOT_IN_OP: {
-      if (has_null) {
-        filter_result = true; 
-        break;
-      }
       char *left_data = nullptr;
       char *right_data = nullptr;
       int set_len = 0;
@@ -176,14 +171,18 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         break;
       }
       RC rc = RC::SUCCESS;
-      filter_result = true;
+      filter_result = !has_null;
       bool has_text = false;
       for (int i=0; i<set_len; i++) {
         Value *value = (Value *)(right_data + i * sizeof(Value));
-        // 先进行类型转换
+        if (value->type == AttrType::NULL_) {
+          filter_result = false;
+          break;
+        }
         rc = convert(left_cell.attr_type(), value, has_text);
         if (rc != RC::SUCCESS) {
-          continue;
+          filter_result = false;
+          break;
         }
         if (0 == memcmp(left_data, value->data, data_len)) {
           filter_result = false;

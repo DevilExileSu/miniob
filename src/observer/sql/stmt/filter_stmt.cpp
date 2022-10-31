@@ -108,6 +108,8 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   Expression *left = nullptr;
   Expression *right = nullptr;
   Value *condition_value = nullptr;
+  Value *left_condition_value = nullptr;
+  Value *right_condition_value = nullptr;
   FieldMeta *condition_field = nullptr;
   Table *left_table = nullptr;
   Table *right_table = nullptr;
@@ -121,6 +123,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     left = new FieldExpr(left_table, field);
     condition_field = const_cast<FieldMeta *>(field);
   } else {
+    left_condition_value = const_cast<Value *>(&condition.left_value);
     condition_value = const_cast<Value *>(&condition.left_value);
     left = new ValueExpr(condition.left_value);
   }
@@ -136,6 +139,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     right = new FieldExpr(right_table, field);
     condition_field = const_cast<FieldMeta *>(field);
   } else {
+    right_condition_value = const_cast<Value *>(&condition.right_value);
     condition_value = const_cast<Value *>(&condition.right_value);
     right = new ValueExpr(condition.right_value);
   }
@@ -147,7 +151,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   
   // 检查两个类型是否能够比较
   // 日期类型不匹配不进行比较，其他类型不同，可以通过隐式转换来进行比较
-  if (condition_value != nullptr 
+  if (condition_value != nullptr
       && condition_field != nullptr 
       && condition_value->type != condition_field->type() 
       && condition_field->type() == AttrType::DATES && condition_value->type != AttrType::NULL_) {
@@ -155,7 +159,11 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
   }
 
-  if (condition_value != nullptr && condition_value->type == AttrType::SELECTS) {
+  if (left_condition_value != nullptr && left_condition_value->type == AttrType::SELECTS) {
+    tmp_stmt->sub_select_units_.emplace_back(filter_unit);
+  }
+
+  if (right_condition_value != nullptr && right_condition_value->type == AttrType::SELECTS) {
     tmp_stmt->sub_select_units_.emplace_back(filter_unit);
   }
 

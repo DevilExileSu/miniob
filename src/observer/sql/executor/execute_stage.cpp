@@ -535,7 +535,7 @@ RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
       field = ((FieldExpr *)right)->field();
     }
     Value res = project_oper->get_result(field);
-    if (res.set_size > 1 && !in_or_exists) {
+    if (res.type == AttrType::SETS && !in_or_exists) {
       return RC::GENERIC_ERROR;
     }
     delete left;
@@ -550,7 +550,7 @@ RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
       field = ((FieldExpr *)left)->field();
     }
     Value res = project_oper->get_result(field);
-    if (res.set_size > 1 && !in_or_exists) {
+    if (res.type == AttrType::SETS && !in_or_exists) {
       return RC::GENERIC_ERROR;
     }
     delete right;
@@ -669,7 +669,6 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 
     tuple_to_string(ss, *tuple);
     ss << std::endl;
-    printf("%s", ss.str().c_str());
   }
 
   if (rc != RC::RECORD_EOF) {
