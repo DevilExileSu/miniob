@@ -3,6 +3,7 @@
 #include "sql/operator/operator.h"
 #include "sql/stmt/filter_stmt.h"
 #include "sql/parser/parse_defs.h"
+#include "util/util.h"
 
 class FilterUnit;
 
@@ -23,24 +24,25 @@ public:
 
   Value get_result(Field field) override {
     Value value;
+    if (tuple_set_.size() == 0) {
+      value_init_null(&value);
+      return value;
+    }
+
+    if (tuple_set_.size() == 1) {
+      TupleCell cell;
+      tuple_set_[0].find_cell(field, cell);
+      value_init_from_cell(cell, &value);
+      return value;
+    }
+
     Value values[tuple_set_.size()];
-    bool has_null = false; 
     for (size_t i=0; i<tuple_set_.size(); i++) {
       TupleCell cell;
       tuple_set_[i].find_cell(field, cell);
-      values[i].data = (TupleCell *)malloc(sizeof(TupleCell));
-      if (cell.attr_type() == AttrType::NULL_) {
-        has_null = true;
-      }
-      values[i].type = cell.attr_type();
-      memcpy(values[i].data, &cell, sizeof(TupleCell));
+      value_init_from_cell(cell, &values[i]);
     }
     value_init_set(&value, values, 0, tuple_set_.size());
-    if (has_null) {
-      value.type = AttrType::NULL_;
-    } else {
-      value.type = AttrType::TUPLESET;
-    }
     return value;
   }
 

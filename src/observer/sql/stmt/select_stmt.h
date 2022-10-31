@@ -15,7 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include <vector>
-
+#include <unordered_map>
 #include "rc.h"
 #include "sql/stmt/stmt.h"
 #include "storage/common/field.h"
@@ -35,6 +35,7 @@ public:
   StmtType type() const override { return StmtType::SELECT; }
 public:
   static RC create(Db *db, const Selects &select_sql, Stmt *&stmt);
+  static RC create_sub_select(Db *db, std::unordered_map<std::string, Table *> &table_map, const Selects &select_sql, Stmt *&stmt);
 
 public:
   const std::vector<Table *> &tables() const { return tables_; }
@@ -51,4 +52,3 @@ private:
   FilterStmt *filter_stmt_ = nullptr;
   std::vector<SelectStmt *> select_stmts_;
 };
-

@@ -226,3 +226,24 @@ int check_prefix(std::string v) {
     }
     return RC::SUCCESS;
  }
+
+  void value_init_from_cell(TupleCell cell, Value *value) {
+      switch (cell.attr_type()) {
+        case TEXTS:
+        case CHARS: {
+            value_init_string(value, cell.data());
+        } break;
+        case INTS: {
+            value_init_integer(value, *(int *)cell.raw_data());
+        } break;
+        case FLOATS: {
+            value_init_float(value, *(float *)cell.raw_data());
+        } break;
+        case DATES: {
+            value_init_date(value, cell.data());
+        } break;
+        default: {
+            value_init_null(value);
+        } break;
+    }
+ }

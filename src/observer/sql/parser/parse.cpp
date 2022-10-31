@@ -195,6 +195,12 @@ void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr
   } else {
     condition->right_value = *right_value;
   }
+  condition->is_multi_table = 0;
+  if (left_is_attr == 1 && right_is_attr == 1) {
+    if (left_attr->relation_name != nullptr && right_attr->relation_name != nullptr && 0 != strcmp(left_attr->relation_name, right_attr->relation_name)) {
+      condition->is_multi_table = 1;
+    }
+  }
 }
 void condition_destroy(Condition *condition)
 {
@@ -256,6 +262,12 @@ void selects_append_conditions(Selects *selects, Condition conditions[], size_t 
   assert(condition_num <= sizeof(selects->conditions) / sizeof(selects->conditions[0]));
   for (size_t i = 0; i < condition_num; i++) {
     selects->conditions[i] = conditions[i + begin];
+    if (selects->conditions[i].left_is_attr && selects->conditions[i].left_attr.relation_name == nullptr) {
+      selects->conditions[i].left_attr.relation_name = strdup(selects->relations[0]);
+    } 
+    if (selects->conditions[i].right_is_attr && selects->conditions[i].right_attr.relation_name == nullptr) {
+      selects->conditions[i].right_attr.relation_name = strdup(selects->relations[0]);
+    }
   }
   selects->condition_num = condition_num;
 }

@@ -44,6 +44,10 @@ RC PredicateOperator::next()
     }
 
     if (do_predicate(static_cast<RowTuple &>(*tuple))) {
+      RowTuple row_tuple = static_cast<RowTuple &>(*tuple);
+      Record *new_record = new Record(row_tuple.record());
+      row_tuple.set_record(new_record);
+      tuple_set_.emplace_back(row_tuple);
       return rc;
     }
   }
@@ -81,64 +85,6 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     bool filter_result = false;
     bool has_null = left_cell.attr_type() == AttrType::NULL_ || right_cell.attr_type() == AttrType::NULL_;
     
-    if (has_null && comp != CompOp::IS_OP && comp != CompOp::IS_NOT_OP) {
-      return false;
-    }
-
-    if (left_cell.attr_type() == AttrType::TUPLESET || right_cell.attr_type() == AttrType::TUPLESET) {
-      TupleCell *tuple_set_cell = nullptr;
-      TupleCell *left_tuple_cell = nullptr;
-      Field field; 
-      if (left_cell.attr_type() == AttrType::TUPLESET) {
-        tuple_set_cell = &left_cell;
-        field = ((FieldExpr *)right_expr)->field();
-        left_tuple_cell = &right_cell;
-      } else {
-        tuple_set_cell = &right_cell;
-        field = ((FieldExpr *)left_expr)->field();
-        left_tuple_cell = &left_cell;
-      }
-      switch (comp) {
-        case EXISTS_OP:
-        case IN_OP: {
-          for (int i=0; i<tuple_set_cell->length(); i++) {
-            Value *value = (Value *)(tuple_set_cell->data() + i * sizeof(Value));
-            if (value->type == AttrType::NULL_) {
-              filter_result = false;
-              break;
-            }
-            TupleCell *cell = (TupleCell *)(value->data);
-            if (left_tuple_cell->compare(*cell) == 0) {
-              filter_result = true;  
-              break;
-            }
-          }
-          break;
-        } break;
-        case NOT_EXISTS_OP:
-        case NOT_IN_OP: {
-          filter_result = true;
-          for (int i=0; i<tuple_set_cell->length(); i++) {
-            Value *value = (Value *)(tuple_set_cell->data() + i * sizeof(Value));
-            if (value->type == AttrType::NULL_) {
-              filter_result = false;
-              break;
-            }
-            TupleCell *cell = (TupleCell *)(value->data);
-            if (left_tuple_cell->compare(*cell) == 0) {
-              filter_result = false;  
-              break;
-            }
-          }
-        } break;
-        default: {
-        } break;
-      }
-      if (!filter_result) {
-        return false;
-      }
-      continue;
-    }
 
     switch (comp) {
     case EQUAL_TO: {
@@ -165,6 +111,7 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     case NOT_LIKE: {
       filter_result = (!like_match(left_cell.data(), right_cell.data()) && !has_null);
     } break;
+    case EXISTS_OP:
     case IN_OP: {
       if (has_null) {
         filter_result = false; 
@@ -179,11 +126,14 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         left_data = right_cell.raw_data();
         data_len = right_cell.length();
         set_len = left_cell.length();
-      }  else {
+      } else if (right_cell.attr_type() == AttrType::SETS){
         right_data = right_cell.raw_data();
         left_data = left_cell.raw_data();
         data_len = left_cell.length();
         set_len = right_cell.length();
+      } else {
+        filter_result = (compare == 0 && !has_null);
+        break;
       }
       RC rc = RC::SUCCESS;
       bool has_text = false;
@@ -197,13 +147,13 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         }
         if (0 == memcmp(left_data, value->data, data_len)) {
           filter_result = true;
-          break;
         }
       }
     } break;
+    case NOT_EXISTS_OP:
     case NOT_IN_OP: {
       if (has_null) {
-        filter_result = false; 
+        filter_result = true; 
         break;
       }
       char *left_data = nullptr;
@@ -215,11 +165,14 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         left_data = right_cell.raw_data();
         data_len = right_cell.length();
         set_len = left_cell.length();
-      }  else {
+      } else if (right_cell.attr_type() == AttrType::SETS){
         right_data = right_cell.raw_data();
         left_data = left_cell.raw_data();
         data_len = left_cell.length();
         set_len = right_cell.length();
+      } else {
+        filter_result = (compare != 0 && !has_null);
+        break;
       }
       RC rc = RC::SUCCESS;
       filter_result = true;
@@ -243,12 +196,6 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     } break;
     case IS_NOT_OP: {
       filter_result = (left_cell.attr_type() != AttrType::NULL_ || right_cell.attr_type() != AttrType::NULL_);
-    } break;
-    case EXISTS_OP: {
-      filter_result = false;
-    } break;
-    case NOT_EXISTS_OP: {
-      filter_result = false;
     } break;
     default: {
       LOG_WARN("invalid compare type: %d", comp);

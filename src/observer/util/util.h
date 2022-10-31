@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 
 #include "rc.h"
+#include "sql/expr/tuple_cell.h"
 #include "sql/parser/parse_defs.h"
 #include "storage/common/field_meta.h"
 
@@ -38,3 +39,5 @@ bool like_match(const char *a, const char *b);
 RC convert(const FieldMeta *field_meta, Value *value, bool &has_text);
 
 RC convert(AttrType type, Value *value, bool &has_text);
+
+void value_init_from_cell(TupleCell cell, Value *value);

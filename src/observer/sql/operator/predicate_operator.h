@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/operator.h"
 #include "sql/parser/parse_defs.h"
+#include "util/util.h"
 
 class FilterUnit;
 
@@ -37,11 +38,30 @@ public:
   RC next() override;
   RC close() override;
 
-  Value get_result(Field field) override{
-    Value res;
-    value_init_null(&res);
-    return res;
+  Value get_result(Field field) override {
+    Value value;
+    if (tuple_set_.size() == 0) {
+      value_init_null(&value);
+      return value;
+    }
+
+    if (tuple_set_.size() == 1) {
+      TupleCell cell;
+      tuple_set_[0].find_cell(field, cell);
+      value_init_from_cell(cell, &value);
+      return value;
+    }
+
+    Value values[tuple_set_.size()];
+    for (size_t i=0; i<tuple_set_.size(); i++) {
+      TupleCell cell;
+      tuple_set_[i].find_cell(field, cell);
+      value_init_from_cell(cell, &values[i]);
+    }
+    value_init_set(&value, values, 0, tuple_set_.size());
+    return value;
   }
+
   Tuple * current_tuple() override;
   //int tuple_cell_num() const override;
   //RC tuple_cell_spec_at(int index, TupleCellSpec &spec) const override;
@@ -49,4 +69,5 @@ private:
   bool do_predicate(RowTuple &tuple);
 private:
   std::vector<FilterUnit *> filter_units_;
+  std::vector<RowTuple> tuple_set_;
 };

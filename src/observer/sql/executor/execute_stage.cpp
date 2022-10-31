@@ -467,7 +467,7 @@ RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
   }
 
   for (size_t i=0; i < select_stmt->sub_select_stmts().size(); i++) {
-    rc = do_sub_select(select_stmt->sub_select_stmts()[i], filter_stmt->sub_select_units()[0]);
+    rc = do_sub_select(select_stmt->sub_select_stmts()[i], filter_stmt->sub_select_units()[i]);
     if (rc != RC::SUCCESS) {
       return rc;
     }
@@ -475,10 +475,13 @@ RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
 
 
   ProjectOperator *project_oper = new ProjectOperator();
-  if (cross_oper_list.empty()) {
-    return RC::GENERIC_ERROR;
+  if (!cross_oper_list.empty()) {
+    // 多表
+    project_oper->add_child(cross_oper_list.back());
+  } else {
+    // 单表
+    project_oper->add_child(pred_oper_list[0]);
   }
-  project_oper->add_child(cross_oper_list.back());
 
   for (const Field &field : select_stmt->query_fields()) {
     project_oper->add_projection(field.table(), field.meta());
@@ -512,9 +515,9 @@ RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
     }
     return RC::SUCCESS;
   }
-  if (!in_or_exists || (comp != CompOp::EXISTS_OP 
+  if (comp != CompOp::EXISTS_OP 
                       && comp != CompOp::NOT_EXISTS_OP
-                      && select_stmt->query_fields().size() > 1)) {
+                      && select_stmt->query_fields().size() > 1) {
 
     return RC::GENERIC_ERROR;
   }
@@ -532,6 +535,9 @@ RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
       field = ((FieldExpr *)right)->field();
     }
     Value res = project_oper->get_result(field);
+    if (res.set_size > 1 && !in_or_exists) {
+      return RC::GENERIC_ERROR;
+    }
     delete left;
     left = nullptr;
     Expression *new_left = new ValueExpr(res);
@@ -544,6 +550,9 @@ RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
       field = ((FieldExpr *)left)->field();
     }
     Value res = project_oper->get_result(field);
+    if (res.set_size > 1 && !in_or_exists) {
+      return RC::GENERIC_ERROR;
+    }
     delete right;
     right = nullptr;
     Expression *new_right = new ValueExpr(res);
@@ -590,7 +599,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   }
 
   for (size_t i=0; i < select_stmt->sub_select_stmts().size(); i++) {
-    rc = do_sub_select(select_stmt->sub_select_stmts()[i], filter_stmt->sub_select_units()[0]);
+    rc = do_sub_select(select_stmt->sub_select_stmts()[i], filter_stmt->sub_select_units()[i]);
     if (rc != RC::SUCCESS) {
       session_event->set_response("FAILURE\n");
       return rc;
