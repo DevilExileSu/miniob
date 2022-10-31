@@ -128,7 +128,7 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         data_len = left_cell.length();
         set_len = right_cell.length();
       } else {
-        filter_result = (compare == 0 && !has_null);
+        filter_result = (compare == 0 && has_null);
         break;
       }
       RC rc = RC::SUCCESS;
@@ -167,7 +167,7 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         data_len = left_cell.length();
         set_len = right_cell.length();
       } else {
-        filter_result = (compare != 0 && !has_null);
+        filter_result = (compare != 0 && has_null);
         break;
       }
       RC rc = RC::SUCCESS;
