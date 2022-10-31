@@ -24,15 +24,23 @@ public:
   Value get_result(Field field) override {
     Value value;
     Value values[tuple_set_.size()];
+    bool has_null = false; 
     for (size_t i=0; i<tuple_set_.size(); i++) {
       TupleCell cell;
       tuple_set_[i].find_cell(field, cell);
       values[i].data = (TupleCell *)malloc(sizeof(TupleCell));
+      if (cell.attr_type() == AttrType::NULL_) {
+        has_null = true;
+      }
       values[i].type = cell.attr_type();
       memcpy(values[i].data, &cell, sizeof(TupleCell));
     }
     value_init_set(&value, values, 0, tuple_set_.size());
-    value.type = AttrType::TUPLESET;
+    if (has_null) {
+      value.type = AttrType::NULL_;
+    } else {
+      value.type = AttrType::TUPLESET;
+    }
     return value;
   }
 

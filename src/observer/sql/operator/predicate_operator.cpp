@@ -81,6 +81,10 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     bool filter_result = false;
     bool has_null = left_cell.attr_type() == AttrType::NULL_ || right_cell.attr_type() == AttrType::NULL_;
     
+    if (has_null && comp != CompOp::IS_OP && comp != CompOp::IS_NOT_OP) {
+      return false;
+    }
+
     if (left_cell.attr_type() == AttrType::TUPLESET || right_cell.attr_type() == AttrType::TUPLESET) {
       TupleCell *tuple_set_cell = nullptr;
       TupleCell *left_tuple_cell = nullptr;
@@ -99,30 +103,39 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         case IN_OP: {
           for (int i=0; i<tuple_set_cell->length(); i++) {
             Value *value = (Value *)(tuple_set_cell->data() + i * sizeof(Value));
-
+            if (value->type == AttrType::NULL_) {
+              filter_result = false;
+              break;
+            }
             TupleCell *cell = (TupleCell *)(value->data);
             if (left_tuple_cell->compare(*cell) == 0) {
               filter_result = true;  
               break;
-            } 
+            }
           }
-          filter_result = false;
           break;
         } break;
         case NOT_EXISTS_OP:
         case NOT_IN_OP: {
+          filter_result = true;
           for (int i=0; i<tuple_set_cell->length(); i++) {
             Value *value = (Value *)(tuple_set_cell->data() + i * sizeof(Value));
+            if (value->type == AttrType::NULL_) {
+              filter_result = false;
+              break;
+            }
             TupleCell *cell = (TupleCell *)(value->data);
             if (left_tuple_cell->compare(*cell) == 0) {
               filter_result = false;  
               break;
             }
           }
-          return true;
         } break;
         default: {
         } break;
+      }
+      if (!filter_result) {
+        return false;
       }
       continue;
     }
