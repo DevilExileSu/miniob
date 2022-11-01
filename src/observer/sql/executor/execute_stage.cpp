@@ -588,9 +588,6 @@ RC do_sub_select(SubSelectStmt sub_select_stmt, FilterUnit *filter_unit,
     }
 
     rc = agg_oper->open();
-    if (rc != RC::SUCCESS && rc != RC::RECORD_EOF) {
-      return rc;
-    }
     Value res = agg_oper->get_result(select_stmt->query_fields()[0]);
     Expression *new_expr = new ValueExpr(res);
     if (sub_select_stmt.is_left_value) {
@@ -618,7 +615,7 @@ RC do_sub_select(SubSelectStmt sub_select_stmt, FilterUnit *filter_unit,
   project_oper->open();
   while ((rc = project_oper->next()) == RC::SUCCESS) {
   }
-  if (rc != RC::RECORD_EOF) {
+  if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
     return rc;
   }
   
@@ -765,7 +762,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     agg_oper.print_header(ss);
     agg_oper.to_string(ss);
     ss << std::endl;
-    if (rc != RC::RECORD_EOF) {
+    if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
       LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
       session_event->set_response("FAILURE\n");
       return rc;
@@ -798,7 +795,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     ss << std::endl;
   }
 
-  if (rc != RC::RECORD_EOF) {
+  if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
     LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
     session_event->set_response("FAILURE\n");
     return rc;

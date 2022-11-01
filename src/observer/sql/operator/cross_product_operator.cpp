@@ -59,7 +59,7 @@ RC CrossProductOperator::next()
   }
   
   if (buffer_tuple_.empty()) {
-    rc = RC::INTERNAL;
+    rc = RC::RECORD_EOF;
     return rc;
   }
 
@@ -76,7 +76,7 @@ RC CrossProductOperator::next()
         return rc;
       }
       rc = children_[1]->open();
-      if (rc != RC::SUCCESS) {
+      if (rc != RC::SUCCESS && rc != RC::RECORD_EOF) {
         return rc;
       }
       composite_tuple.clear_tuple();
@@ -161,7 +161,7 @@ RC CrossProductOperator::do_sub_query() {
   while ((rc = left_oper->next()) == RC::SUCCESS) {
     Operator *right_oper = children_[1];
     rc = right_oper->open();
-    if (rc != RC::SUCCESS) {
+    if (rc != RC::SUCCESS && rc != RC::RECORD_EOF) {
       return rc;
     }
     // 等待子查询执行完毕
