@@ -26,9 +26,9 @@ SelectStmt::~SelectStmt()
     delete filter_stmt_;
     filter_stmt_ = nullptr;
   }
-  for (size_t i = 0; i < select_stmts_.size(); i++) {
-    delete select_stmts_[i];
-    select_stmts_[i] = nullptr;
+  for (size_t i = 0; i < sub_select_stmts_.size(); i++) {
+    delete sub_select_stmts_[i].select;
+    sub_select_stmts_[i].select = nullptr;
   }
 }
 
@@ -45,8 +45,8 @@ static void wildcard_fields(Table *table, std::vector<Field> &field_metas, bool 
   }
 }
 
-RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *> &table_map, const Selects &select_sql, Stmt *&stmt)
-{
+RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *> &table_map, const Selects &select_sql, Stmt *&stmt, bool &has_joint, Table *&joint_table) {
+  
   std::vector<Table *> tables;
   for (size_t i = 0; i < select_sql.relation_num; i++) {
     const char *table_name = select_sql.relations[i];
@@ -142,6 +142,8 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
   if (!tables.empty()) {
     default_table = tables[0];
   }
+
+  joint_table = nullptr;
   auto add_relation = [&](const char *relation_name) -> RC {
     auto iter = table_map.find(relation_name);
     if (iter == table_map.end()) {
@@ -150,17 +152,20 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
     bool has_relation = false;
     for (int i=0; i<select_sql.relation_num; i++) {
       if (0 == strcmp(select_sql.relations[i], relation_name)) {
+        // joint_table = iter->second;
         has_relation = true;
         break;
       }
     }
     if (!has_relation) {
       tables.emplace_back(iter->second);
+      has_joint = true;
+      joint_table = iter->second;
     }
     return RC::SUCCESS;
   }; 
 
-  std::vector<SelectStmt *> sub_select_stmt;
+  std::vector<SubSelectStmt> sub_select_stmt;
   for (size_t i = 0; i < select_sql.condition_num; i++) {
     RC rc = RC::SUCCESS;
     if (select_sql.conditions[i].left_is_attr == 1 && select_sql.conditions[i].left_attr.relation_name != nullptr) {
@@ -178,9 +183,21 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
     if (select_sql.conditions[i].left_is_attr == 0 && select_sql.conditions[i].left_value.type == AttrType::SELECTS) {
       Selects select = *(Selects *)select_sql.conditions[i].left_value.data;
       Stmt *sub_stmt = nullptr;
-      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt);
+      Table *sub_joint_table = nullptr;
+      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table);
+      if (joint_table == nullptr && sub_joint_table != nullptr) {
+        joint_table = sub_joint_table;
+      }
+      if (!has_joint && sub_joint_table == nullptr) {
+        sub_joint_table = default_table;
+      }
       SelectStmt *select_stmt = static_cast<SelectStmt *>(sub_stmt);
-      sub_select_stmt.emplace_back(select_stmt);
+      SubSelectStmt sub_select;
+      sub_select.has_joint = has_joint;
+      sub_select.is_left_value = true;
+      sub_select.select = select_stmt;
+      sub_select.joint_table = sub_joint_table;
+      sub_select_stmt.emplace_back(sub_select);
       if (rc != RC::SUCCESS) {
         return rc;
       }
@@ -189,9 +206,21 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
     if (select_sql.conditions[i].right_is_attr == 0 && select_sql.conditions[i].right_value.type == AttrType::SELECTS) {
       Selects select = *(Selects *)select_sql.conditions[i].right_value.data;
       Stmt *sub_stmt = nullptr;
-      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt);
+      Table *sub_joint_table = nullptr;
+      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table);
+      if (joint_table == nullptr && sub_joint_table != nullptr) {
+        joint_table = sub_joint_table;
+      }
+      if (!has_joint && sub_joint_table == nullptr) {
+        sub_joint_table = default_table;
+      }
       SelectStmt *select_stmt = static_cast<SelectStmt *>(sub_stmt);
-      sub_select_stmt.emplace_back(select_stmt);
+      SubSelectStmt sub_select;
+      sub_select.has_joint = has_joint;
+      sub_select.is_left_value = false;
+      sub_select.select = select_stmt;
+      sub_select.joint_table = sub_joint_table;
+      sub_select_stmt.emplace_back(sub_select);
       if (rc != RC::SUCCESS) {
         return rc;
       }
@@ -213,8 +242,9 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->rel_attrs_.swap(rel_attrs);
-  select_stmt->select_stmts_.swap(sub_select_stmt);
+  select_stmt->sub_select_stmts_.swap(sub_select_stmt);
   select_stmt->filter_stmt_ = filter_stmt;
+  select_stmt->is_and_ = select_sql.is_and;
   stmt = select_stmt;
   return RC::SUCCESS;
 }
@@ -342,25 +372,42 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   if (!tables.empty()) {
     default_table = tables[0];
   }
-  std::vector<SelectStmt *> sub_select_stmt;
+  std::vector<SubSelectStmt> sub_select_stmt;
   for (size_t i = 0; i < select_sql.condition_num; i++) {
     RC rc = RC::SUCCESS;
     if (select_sql.conditions[i].left_is_attr == 0 && select_sql.conditions[i].left_value.type == AttrType::SELECTS) {
       Selects select = *(Selects *)select_sql.conditions[i].left_value.data;
       Stmt *sub_stmt = nullptr;
-      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt);
+      bool has_joint = false;
+      Table *sub_joint_table = nullptr;
+      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table);
+      if (!has_joint && sub_joint_table == nullptr) {
+        sub_joint_table = default_table;
+      }
       SelectStmt *select_stmt = static_cast<SelectStmt *>(sub_stmt);
-      sub_select_stmt.emplace_back(select_stmt);
-
+      SubSelectStmt sub_select;
+      sub_select.has_joint = has_joint;
+      sub_select.is_left_value = true;
+      sub_select.select = select_stmt;
+      sub_select.joint_table = sub_joint_table;
+      sub_select_stmt.emplace_back(sub_select);
     }
     if (select_sql.conditions[i].right_is_attr == 0 && select_sql.conditions[i].right_value.type == AttrType::SELECTS) {
       Selects select = *(Selects *)select_sql.conditions[i].right_value.data;
       Stmt *sub_stmt = nullptr;
-      
-      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt);
+      bool has_joint = false;
+      Table *sub_joint_table = nullptr;
+      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table);
+      if (!has_joint && sub_joint_table == nullptr) {
+        sub_joint_table = default_table;
+      }
       SelectStmt *select_stmt = static_cast<SelectStmt *>(sub_stmt);
-      sub_select_stmt.emplace_back(select_stmt);
-
+      SubSelectStmt sub_select;
+      sub_select.has_joint = has_joint;
+      sub_select.is_left_value = false;
+      sub_select.select = select_stmt;
+      sub_select.joint_table = sub_joint_table;
+      sub_select_stmt.emplace_back(sub_select);
     }
     if (rc != RC::SUCCESS) {
       return rc;
@@ -382,9 +429,9 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->rel_attrs_.swap(rel_attrs);
-  select_stmt->select_stmts_.swap(sub_select_stmt);
+  select_stmt->sub_select_stmts_.swap(sub_select_stmt);
   select_stmt->filter_stmt_ = filter_stmt;
+  select_stmt->is_and_ = select_sql.is_and;
   stmt = select_stmt;
-  printf("after create select\n");
   return RC::SUCCESS;
 }

@@ -111,6 +111,7 @@ ParserContext *get_context(yyscan_t scanner)
 		DATE_T
 		TEXT_T
 		NULL_T
+		LENGTH_T
 		NULLABLE
         HELP
         EXIT
@@ -175,6 +176,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <number> nullable;
 %type <number> comOp;
 %type <string> alias_ID;
+%type <number> func;
 
 %%
 
@@ -415,7 +417,7 @@ value:
 		if (res != 0) {
 			CONTEXT->ssql->flag = SCF_INVALID_DATE;
 			yyresult = 2;
-			goto yyreturn;
+			goto yyreturnlab;
 		}
 	}
     |SSS {
@@ -600,19 +602,19 @@ agg:
 	| agg_func LBRACE STAR COMMA ID RBRACE {
 		CONTEXT->ssql->flag = SCF_INVALID_DATE;
 		yyresult = 2;
-		goto yyreturn;
+		goto yyreturnlab;
 	}
 	| agg_func LBRACE ID COMMA ID RBRACE {
 		// 错误类型
 		CONTEXT->ssql->flag = SCF_INVALID_DATE;
 		yyresult = 2;
-		goto yyreturn;
+		goto yyreturnlab;
 	}
 	| agg_func LBRACE RBRACE {
 		// 错误类型
 		CONTEXT->ssql->flag = SCF_INVALID_DATE;
 		yyresult = 2;
-		goto yyreturn;
+		goto yyreturnlab;
 	}
 	;
 
@@ -687,9 +689,10 @@ condition_list:
     /* empty */
     | AND condition condition_list {
 				// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
+		CONTEXT->selections[CONTEXT->select_num].is_and = 1;
 	}
 	| OR condition condition_list {
-
+	 	CONTEXT->selections[CONTEXT->select_num].is_and = 0;
 	}
     ;
 condition:
@@ -909,7 +912,7 @@ condition:
 		if ($1 != EXISTS_OP && $1 != NOT_EXISTS_OP) {
 			CONTEXT->ssql->flag = SCF_INVALID_DATE;
 			yyresult = 2;
-			goto yyreturn;
+			goto yyreturnlab;
 		}
 		Value right_value;
 		value_init_select(&right_value, &CONTEXT->selections[CONTEXT->select_num - 1]);

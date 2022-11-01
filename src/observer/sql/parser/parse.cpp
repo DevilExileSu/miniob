@@ -195,12 +195,6 @@ void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr
   } else {
     condition->right_value = *right_value;
   }
-  condition->is_multi_table = 0;
-  if (left_is_attr == 1 && right_is_attr == 1) {
-    if (left_attr->relation_name != nullptr && right_attr->relation_name != nullptr && 0 != strcmp(left_attr->relation_name, right_attr->relation_name)) {
-      condition->is_multi_table = 1;
-    }
-  }
 }
 void condition_destroy(Condition *condition)
 {

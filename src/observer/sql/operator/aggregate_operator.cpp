@@ -11,6 +11,9 @@ RC AggregateOperator::open()
     LOG_WARN("Aggregate operator must has 1 child");
     return RC::INTERNAL;
   }
+  for (size_t i=0; i<stat_.size(); i++) {
+    stat_[i].reset();
+  }
 
   Operator *child = children_[0];
   RC rc = child->open();

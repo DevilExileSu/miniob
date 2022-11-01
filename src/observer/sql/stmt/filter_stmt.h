@@ -66,6 +66,18 @@ public:
     return right_;
   }
 
+  std::pair<const char*, const char*> get_table_name() {
+    const char *left_table = nullptr;
+    const char *right_table = nullptr;
+    if (left_ != nullptr && left_->type() == ExprType::FIELD) {
+      left_table = static_cast<FieldExpr *>(left_)->table_name();
+    }
+    if (right_ != nullptr && right_->type() == ExprType::FIELD) {
+      right_table = static_cast<FieldExpr *>(right_)->table_name();
+    }
+    return std::make_pair(left_table, right_table);
+  } 
+
 private:
   CompOp comp_ = NO_OP;
   Expression *left_ = nullptr;
@@ -93,6 +105,18 @@ public:
     }
   }
 
+  const std::unordered_map<std::string, std::vector<FilterUnit *>> &get_single_filter_units() const {
+    return single_filter_units_;
+  }
+
+  void add_single_filter_unit(const char *table_name, FilterUnit *filter_unit) {
+    single_filter_units_[std::string(table_name)].emplace_back(filter_unit);
+  }
+
+  void add_filter_unit(FilterUnit *filter_unit) {
+    filter_units_.emplace_back(filter_unit);
+  }
+
   const std::vector<FilterUnit *> &sub_select_units() const
   {
     return sub_select_units_;
@@ -108,6 +132,6 @@ public:
 
 private:
   std::unordered_map<std::string, std::vector<FilterUnit *>> single_filter_units_;
-  std::vector<FilterUnit *>  filter_units_; // 默认当前都是AND关系
+  std::vector<FilterUnit *> filter_units_; // 默认当前都是AND关系
   std::vector<FilterUnit *> sub_select_units_;
 };

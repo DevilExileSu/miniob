@@ -28,8 +28,12 @@ class PredicateOperator : public Operator
 {
 public:
 
-  PredicateOperator(std::vector<FilterUnit *> &filter_units)
-    : filter_units_(filter_units)
+  PredicateOperator(std::vector<FilterUnit *> &filter_units, bool is_and = true)
+    : filter_units_(filter_units), is_and_(is_and)
+  {}
+
+  PredicateOperator(const char *table_name, std::vector<FilterUnit *> &filter_units, std::vector<FilterUnit *> &sub_query_units, bool is_and = true)
+    : filter_units_(filter_units), sub_query_units_(sub_query_units), table_name_(table_name), is_and_(is_and)
   {}
 
   virtual ~PredicateOperator() = default;
@@ -67,7 +71,19 @@ public:
   //RC tuple_cell_spec_at(int index, TupleCellSpec &spec) const override;
 private:
   bool do_predicate(RowTuple &tuple);
+
+  RC modify_sub_query_units(Tuple *tuple);
+
 private:
   std::vector<FilterUnit *> filter_units_;
   std::vector<RowTuple> tuple_set_;
+  // 需要修改子查询中的FilterUnit
+  std::vector<FilterUnit *> sub_query_units_;
+  // 用来找到FilterUnit中对应的Expression
+  const char *table_name_;
+  bool is_left_ = false;
+  bool is_right_ = false;
+  Field left_field_;
+  Field right_field_;
+  bool is_and_ = true;
 };

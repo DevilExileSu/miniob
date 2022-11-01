@@ -111,3 +111,6 @@ select * from csq_1 where col1 in (select * from csq_2);
 FAILURE
 select * from csq_1 where col1 not in (select * from csq_2);
 FAILURE
+
+
+select * from csq_1 where (select max(csq_2.feat2) from csq_2) > feat1 or (select min(csq_3.col3) from csq_3) < col1;

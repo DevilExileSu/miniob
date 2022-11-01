@@ -14,6 +14,8 @@ See the Mulan PSL v2 for more details. */
 
 #include <string>
 #include <sstream>
+#include <map>
+#include <unordered_map>
 
 #include "execute_stage.h"
 
@@ -433,30 +435,95 @@ IndexScanOperator *try_to_create_index_scan_operator(std::vector<FilterUnit *> &
 }
 
 // 子查询先执行完毕后，更新filter_stmt->sub_select_units中对应的TupleCell
-RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
+RC do_sub_select(SubSelectStmt sub_select_stmt, FilterUnit *filter_unit, 
+                 std::unordered_map<size_t, std::vector<FilterUnit *>> &sub_query_filter, Operator *&oper) {
   RC rc = RC::SUCCESS;
-
+  SelectStmt *select_stmt = static_cast<SelectStmt *>(sub_select_stmt.select);
+  bool is_and = select_stmt->is_and();
   FilterStmt *filter_stmt = select_stmt->filter_stmt();
   std::vector<FilterUnit *> single_filter_units;
   std::vector<Operator *> scan_oper_list;
   std::vector<PredicateOperator *> pred_oper_list;
   std::vector<CrossProductOperator *> cross_oper_list;
+  std::vector<std::pair<Operator *, FilterUnit *>> sub_oper_list;
+  std::vector<SubSelectStmt> sub_query_select;
+
+  for (size_t i=0; i < select_stmt->sub_select_stmts().size(); i++) {
+    SubSelectStmt sub_select_stmt_i = select_stmt->sub_select_stmts()[i];
+    FilterUnit *sub_filter_unit = filter_stmt->sub_select_units()[i];
+    Operator *sub_oper =  nullptr;
+
+    CompOp comp = sub_filter_unit->comp();
+    bool not_exists_op = (comp != EXISTS_OP && comp != NOT_EXISTS_OP);
+
+    rc = do_sub_select(sub_select_stmt_i, sub_filter_unit, sub_query_filter, sub_oper);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+
+    // 没有和外层查询进行关联，并且没有重复添加 将sub_filter_unit加回去，
+    // 这里的sub_filter_unit已经是子查询执行完毕后的结果
+    // 不考虑 exists
+    if ((!sub_select_stmt_i.has_joint 
+        || (!sub_select_stmt_i.has_joint && i >= 1 && sub_filter_unit != filter_stmt->sub_select_units()[i-1]))
+        || !not_exists_op) {
+      if (not_exists_op) {
+        filter_stmt->add_single_filter_unit(sub_select_stmt_i.joint_table->name(), sub_filter_unit);
+      } else {
+        filter_stmt->add_filter_unit(sub_filter_unit);
+      }
+    } else if (sub_select_stmt_i.has_joint && sub_oper != nullptr) {
+      sub_oper_list.emplace_back(std::make_pair(sub_oper, sub_filter_unit));
+      sub_query_select.emplace_back(sub_select_stmt_i);
+    }
+  }
+
+  CompOp comp = filter_unit->comp();
+  bool not_exists_op = (comp != EXISTS_OP && comp != NOT_EXISTS_OP);
+  // 从联表条件中去掉和父查询关联的条件
+  auto composite_filter_units = const_cast<std::vector<FilterUnit *> *>(&filter_stmt->filter_units());
+  for (auto iter = composite_filter_units->begin(); iter < composite_filter_units->end(); ++iter) {
+    size_t table_ptr = reinterpret_cast<size_t>(sub_select_stmt.joint_table);
+    auto table_name = (*iter)->get_table_name();
+    if (0 == strcmp(sub_select_stmt.joint_table->name(), table_name.first) && not_exists_op) {
+      sub_query_filter[table_ptr].emplace_back(*iter);
+      filter_stmt->add_single_filter_unit(table_name.second, *iter);
+      composite_filter_units->erase(iter);
+    } else if (0 == strcmp(sub_select_stmt.joint_table->name(), table_name.second) && not_exists_op) {
+      sub_query_filter[table_ptr].emplace_back(*iter);
+      filter_stmt->add_single_filter_unit(table_name.first, *iter);
+      composite_filter_units->erase(iter);
+    }
+  }
+  
+  
 
   for (auto table: select_stmt->tables()) {
+    size_t table_ptr = reinterpret_cast<size_t>(table);
+    // 如果是和外层查询相关联的表，跳过，对应的值通过外层查询修改Expression来实现。
+    if (sub_select_stmt.has_joint && sub_select_stmt.joint_table == table && not_exists_op) {
+      continue;
+    }
+    
+    // 查找sub_query_filter中是否含有关联当前table的子查询FilterUnit
+    // 判断表是否有相关联的内层查询
+    auto iter = sub_query_filter.find(table_ptr);
     filter_stmt->single_filter_units(table->name(), single_filter_units);
 
-    Operator *scan_oper = try_to_create_index_scan_operator(single_filter_units);
-    if (nullptr == scan_oper) {
-      scan_oper = new TableScanOperator(table);
+    Operator *scan_oper = new TableScanOperator(table);
+    PredicateOperator *pred_oper = nullptr;
+    if (iter == sub_query_filter.end()) {
+      pred_oper = new PredicateOperator(single_filter_units, is_and);
+    } else {
+      pred_oper = new PredicateOperator(table->name(), single_filter_units, iter->second, is_and);
     }
-    PredicateOperator *pred_oper = new PredicateOperator(single_filter_units);
     pred_oper->add_child(scan_oper);
     pred_oper_list.push_back(pred_oper);
     single_filter_units.clear();
   }
 
-  for (int i=1; i<pred_oper_list.size() ; i++) {
-    CrossProductOperator *cross_oper = new CrossProductOperator(filter_stmt->filter_units());
+  for (size_t i=1; i<pred_oper_list.size() ; i++) {
+    CrossProductOperator *cross_oper = new CrossProductOperator(*composite_filter_units, is_and);
     if (i == 1) {
       cross_oper->add_child(pred_oper_list[0]);
     } else {
@@ -466,12 +533,18 @@ RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
     cross_oper_list.emplace_back(cross_oper);
   }
 
-  for (size_t i=0; i < select_stmt->sub_select_stmts().size(); i++) {
-    rc = do_sub_select(select_stmt->sub_select_stmts()[i], filter_stmt->sub_select_units()[i]);
-    if (rc != RC::SUCCESS) {
-      return rc;
+  for (size_t i=0; i < sub_oper_list.size(); i++) {
+
+    CrossProductOperator *cross_oper = new CrossProductOperator(true, sub_oper_list[i].second, sub_query_select[i], is_and);
+    if (cross_oper_list.empty()) {
+      cross_oper->add_child(pred_oper_list[0]);
+    } else {
+      cross_oper->add_child(cross_oper_list.back());
     }
+    cross_oper->add_child(sub_oper_list[i].first);
+    cross_oper_list.emplace_back(cross_oper);
   }
+
 
 
   ProjectOperator *project_oper = new ProjectOperator();
@@ -486,9 +559,17 @@ RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
   for (const Field &field : select_stmt->query_fields()) {
     project_oper->add_projection(field.table(), field.meta());
   }
-  CompOp comp = filter_unit->comp();
-  Expression *left = filter_unit->left();
-  Expression *right = filter_unit->right();
+  
+  Expression *expr = nullptr;
+  Expression *field_expr = nullptr;
+  if (sub_select_stmt.is_left_value) {
+    expr = filter_unit->left();
+    field_expr = filter_unit->right();
+  } else {
+    expr = filter_unit->right();
+    field_expr = filter_unit->left();
+  }
+  
   bool in_or_exists = (comp == CompOp::IN_OP 
                        || comp == CompOp::NOT_IN_OP 
                        || comp == CompOp::EXISTS_OP 
@@ -499,65 +580,62 @@ RC do_sub_select(SelectStmt *select_stmt, FilterUnit *filter_unit) {
     }
     AggregateOperator *agg_oper = new AggregateOperator(select_stmt->rel_attrs(), select_stmt->query_fields());
     agg_oper->add_child(project_oper);
-    agg_oper->open();
-    if (left->type() == ExprType::VALUE) {
-      Value res = agg_oper->get_result(select_stmt->query_fields()[0]);
-      delete left;
-      left = nullptr;
-      Expression *new_left = new ValueExpr(res);
-      filter_unit->set_left(new_left);
-    } else {
-      Value res = agg_oper->get_result(select_stmt->query_fields()[0]);
-      delete right;
-      right = nullptr;
-      Expression *new_right = new ValueExpr(res);
-      filter_unit->set_right(new_right);
+
+    // 如果与外层查询相关联，
+    if (sub_select_stmt.has_joint && comp != CompOp::EXISTS_OP && comp != CompOp::NOT_EXISTS_OP) {
+      oper = agg_oper; 
+      return RC::SUCCESS;
     }
+
+    agg_oper->open();
+    Value res = agg_oper->get_result(select_stmt->query_fields()[0]);
+    Expression *new_expr = new ValueExpr(res);
+    if (sub_select_stmt.is_left_value) {
+      filter_unit->set_left(new_expr);
+    } else {
+      filter_unit->set_right(new_expr);
+    }
+    delete expr;
     return RC::SUCCESS;
   }
+
   if (comp != CompOp::EXISTS_OP 
                       && comp != CompOp::NOT_EXISTS_OP
                       && select_stmt->query_fields().size() > 1) {
 
     return RC::GENERIC_ERROR;
   }
+
+  // 如果与外层查询相关联，
+  if (sub_select_stmt.has_joint && comp != CompOp::EXISTS_OP && comp != CompOp::NOT_EXISTS_OP) {
+    oper = project_oper; 
+    return RC::SUCCESS;
+  }
+
   project_oper->open();
   while ((rc = project_oper->next()) == RC::SUCCESS) {
   }
   if (rc != RC::RECORD_EOF) {
     return rc;
   }
-  if (left->type() == ExprType::VALUE) {
-    Field field;
-    if (comp != CompOp::EXISTS_OP && comp != CompOp::NOT_EXISTS_OP) {
-      field = select_stmt->query_fields()[0];
-    } else {
-      field = ((FieldExpr *)right)->field();
-    }
-    Value res = project_oper->get_result(field);
-    if (res.type == AttrType::SETS && !in_or_exists) {
-      return RC::GENERIC_ERROR;
-    }
-    delete left;
-    left = nullptr;
-    Expression *new_left = new ValueExpr(res);
-    filter_unit->set_left(new_left);
+  
+  Field field;
+  if (comp != CompOp::EXISTS_OP && comp != CompOp::NOT_EXISTS_OP) {
+    field = select_stmt->query_fields()[0];
   } else {
-    Field field;
-    if (comp != CompOp::EXISTS_OP && comp != CompOp::NOT_EXISTS_OP) {
-      field = select_stmt->query_fields()[0];
-    } else {
-      field = ((FieldExpr *)left)->field();
-    }
-    Value res = project_oper->get_result(field);
-    if (res.type == AttrType::SETS && !in_or_exists) {
-      return RC::GENERIC_ERROR;
-    }
-    delete right;
-    right = nullptr;
-    Expression *new_right = new ValueExpr(res);
-    filter_unit->set_right(new_right);
+    field = ((FieldExpr *)field_expr)->field();
   }
+  Value res = project_oper->get_result(field);
+  if (res.type == AttrType::SETS && !in_or_exists) {
+    return RC::GENERIC_ERROR;
+  }
+  Expression *new_expr = new ValueExpr(res);
+  if (sub_select_stmt.is_left_value) {
+    filter_unit->set_left(new_expr);
+  } else {
+    filter_unit->set_right(new_expr);
+  }
+  delete expr;
   return RC::SUCCESS;
 }
 
@@ -567,28 +645,70 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   SelectStmt *select_stmt = (SelectStmt *)(sql_event->stmt());
   SessionEvent *session_event = sql_event->session_event();
   RC rc = RC::SUCCESS;
-
+  bool is_and = select_stmt->is_and();
   FilterStmt *filter_stmt = select_stmt->filter_stmt();
   std::vector<FilterUnit *> single_filter_units;
   std::vector<Operator *> scan_oper_list;
   std::vector<PredicateOperator *> pred_oper_list;
   std::vector<CrossProductOperator *> cross_oper_list;
+  std::vector<std::pair<Operator *, FilterUnit *>> sub_oper_list;
+  std::vector<SubSelectStmt> sub_query_select;
+  
+  std::unordered_map<size_t, std::vector<FilterUnit *>> sub_query_filter;
+
+  for (size_t i=0; i < select_stmt->sub_select_stmts().size(); i++) {
+    SubSelectStmt sub_select_stmt = select_stmt->sub_select_stmts()[i];
+    FilterUnit *sub_filter_unit = filter_stmt->sub_select_units()[i];
+    Operator *sub_oper =  nullptr;
+    CompOp comp = sub_filter_unit->comp();
+    bool not_exists_op = (comp != EXISTS_OP && comp != NOT_EXISTS_OP);
+
+    rc = do_sub_select(sub_select_stmt, sub_filter_unit, sub_query_filter, sub_oper);
+    if (rc != RC::SUCCESS) {
+      session_event->set_response("FAILURE\n");
+      return rc;
+    }
+
+    // 没有和外层查询进行关联, 将sub_filter_unit加回去，这里的sub_filter_unit已经是子查询执行完毕后的结果
+    if ((!sub_select_stmt.has_joint 
+        || (!sub_select_stmt.has_joint && i >= 1 && sub_filter_unit != filter_stmt->sub_select_units()[i-1]))
+        || !not_exists_op) {
+
+      filter_stmt->add_single_filter_unit(select_stmt->tables()[0]->name(), sub_filter_unit);
+    
+    } else if (sub_select_stmt.has_joint && sub_oper != nullptr) {
+      sub_oper_list.emplace_back(std::make_pair(sub_oper, sub_filter_unit));
+      sub_query_select.emplace_back(sub_select_stmt);
+    }
+  }
 
   for (auto table: select_stmt->tables()) {
+    size_t table_ptr = reinterpret_cast<size_t>(table);
     filter_stmt->single_filter_units(table->name(), single_filter_units);
 
     Operator *scan_oper = try_to_create_index_scan_operator(single_filter_units);
     if (nullptr == scan_oper) {
       scan_oper = new TableScanOperator(table);
     }
-    PredicateOperator *pred_oper = new PredicateOperator(single_filter_units);
+
+    // 查找sub_query_filter中是否含有关联当前table的子查询FilterUnit
+    // 判断表是否有相关联的内层查询
+    auto iter = sub_query_filter.find(table_ptr);
+    filter_stmt->single_filter_units(table->name(), single_filter_units);
+    
+    PredicateOperator *pred_oper = nullptr;
+    if (iter == sub_query_filter.end()) {
+      pred_oper = new PredicateOperator(single_filter_units, is_and);
+    } else {
+      pred_oper = new PredicateOperator(table->name(), single_filter_units, iter->second, is_and);
+    }
     pred_oper->add_child(scan_oper);
     pred_oper_list.push_back(pred_oper);
     single_filter_units.clear();
   }
 
   for (int i=1; i<pred_oper_list.size() ; i++) {
-    CrossProductOperator *cross_oper = new CrossProductOperator(filter_stmt->filter_units());
+    CrossProductOperator *cross_oper = new CrossProductOperator(filter_stmt->filter_units(), is_and);
     if (i == 1) {
       cross_oper->add_child(pred_oper_list[0]);
     } else {
@@ -598,12 +718,15 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     cross_oper_list.emplace_back(cross_oper);
   }
 
-  for (size_t i=0; i < select_stmt->sub_select_stmts().size(); i++) {
-    rc = do_sub_select(select_stmt->sub_select_stmts()[i], filter_stmt->sub_select_units()[i]);
-    if (rc != RC::SUCCESS) {
-      session_event->set_response("FAILURE\n");
-      return rc;
+  for (size_t i=0; i < sub_oper_list.size(); i++) {
+    CrossProductOperator *cross_oper = new CrossProductOperator(true, sub_oper_list[i].second, sub_query_select[i], is_and);
+    if (cross_oper_list.empty()) {
+      cross_oper->add_child(pred_oper_list[0]);
+    } else {
+      cross_oper->add_child(cross_oper_list.back());
     }
+    cross_oper->add_child(sub_oper_list[i].first);
+    cross_oper_list.emplace_back(cross_oper);
   }
 
   DEFER([&]() { 

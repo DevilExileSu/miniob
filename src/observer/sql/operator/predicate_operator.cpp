@@ -26,7 +26,7 @@ RC PredicateOperator::open()
     LOG_WARN("predicate operator must has one child");
     return RC::INTERNAL;
   }
-
+  tuple_set_.clear();
   return children_[0]->open();
 }
 
@@ -45,6 +45,7 @@ RC PredicateOperator::next()
 
     if (do_predicate(static_cast<RowTuple &>(*tuple))) {
       RowTuple row_tuple = static_cast<RowTuple &>(*tuple);
+      modify_sub_query_units(tuple);
       Record *new_record = new Record(row_tuple.record());
       row_tuple.set_record(new_record);
       tuple_set_.emplace_back(row_tuple);
@@ -63,6 +64,57 @@ RC PredicateOperator::close()
 Tuple * PredicateOperator::current_tuple()
 {
   return children_[0]->current_tuple();
+}
+
+
+RC PredicateOperator::modify_sub_query_units(Tuple *tuple) {
+  for (auto sub_query_unit: sub_query_units_) {
+    Expression *left = sub_query_unit->left();
+    Expression *right = sub_query_unit->right();
+    if (left->type() == ExprType::FIELD || is_left_) {
+      if (!is_left_) {
+        FieldExpr *field_expr = static_cast<FieldExpr *>(left);
+        Field field = field_expr->field();
+        if (0 == strcmp(field_expr->table_name(), table_name_)) {
+          left_field_ = field;
+          is_left_ = true;
+          TupleCell cell;
+          tuple->find_cell(left_field_, cell);
+          ValueExpr *new_left = new ValueExpr(std::move(cell));
+          sub_query_unit->set_left(new_left);
+          delete left;
+        }
+      } else {
+        TupleCell cell;
+        tuple->find_cell(left_field_, cell);
+        ValueExpr *new_left = new ValueExpr(std::move(cell));
+        sub_query_unit->set_left(new_left);
+        delete left;
+      }
+    } 
+    if (right->type() == ExprType::FIELD || is_right_) {
+      if (!is_right_) {
+        FieldExpr *field_expr = static_cast<FieldExpr *>(right);
+        Field field = field_expr->field();
+        if (0 == strcmp(field_expr->table_name(), table_name_)) {
+          right_field_ = field;
+          is_right_ = true;
+          TupleCell cell;
+          tuple->find_cell(right_field_, cell);
+          ValueExpr *new_right = new ValueExpr(std::move(cell));
+          sub_query_unit->set_right(new_right);
+          delete right;
+        }
+      } else {
+        TupleCell cell;
+        tuple->find_cell(right_field_, cell);
+        ValueExpr *new_right = new ValueExpr(std::move(cell));
+        sub_query_unit->set_right(new_right);
+        delete right;
+      }
+    }
+  }
+  return RC::SUCCESS;
 }
 
 bool PredicateOperator::do_predicate(RowTuple &tuple)
@@ -127,8 +179,14 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         left_data = left_cell.raw_data();
         data_len = left_cell.length();
         set_len = right_cell.length();
+      } else if (left_cell.attr_type() == AttrType::NULL_){
+        filter_result = false;
+        break;
+      } else if (right_cell.attr_type() == AttrType::NULL_) {
+        filter_result = false;
+        break;
       } else {
-        filter_result = (compare == 0 && has_null);
+        filter_result = (compare == 0);
         break;
       }
       RC rc = RC::SUCCESS;
@@ -166,8 +224,11 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         left_data = left_cell.raw_data();
         data_len = left_cell.length();
         set_len = right_cell.length();
+      } else if (left_cell.attr_type() == AttrType::NULL_){
+        filter_result = false;
+        break;
       } else {
-        filter_result = (compare != 0 && has_null);
+        filter_result = (compare != 0);
         break;
       }
       RC rc = RC::SUCCESS;
@@ -200,11 +261,19 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
       LOG_WARN("invalid compare type: %d", comp);
     } break;
     }
-    if (!filter_result) {
+    
+    if (!filter_result && is_and_) {
       return false;
+    } else if (!filter_result && !is_and_) {
+      continue;
+    } else if (filter_result && is_and_) {
+      continue;
+    } else if (filter_result && !is_and_) {
+      return true;
     }
   }
-  return true;
+
+  return is_and_;
 }
 
 // int PredicateOperator::tuple_cell_num() const
