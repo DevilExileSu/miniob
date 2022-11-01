@@ -14,6 +14,9 @@ RC CrossProductOperator::open() {
   tuple_set_.clear();
   if (!is_sub_query_) { 
     RC rc = children_[1]->open();
+    if (rc != SUCCESS) {
+      return rc;
+    }
     while (RC::SUCCESS == (rc = children_[1]->next())) {
       Tuple *right_tuple = children_[1]->current_tuple();
       buffer_tuple_.emplace_back(right_tuple);
@@ -72,7 +75,10 @@ RC CrossProductOperator::next()
       if ((rc = left_oper->next()) != RC::SUCCESS) {
         return rc;
       }
-      children_[1]->open();
+      rc = children_[1]->open();
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
       composite_tuple.clear_tuple();
       composite_tuple.add_tuple(left_oper->current_tuple());
     } else {
@@ -102,7 +108,10 @@ RC CrossProductOperator::next()
       if ((rc = left_oper->next()) != RC::SUCCESS) {
         return rc;
       }
-      children_[1]->open();
+      rc = children_[1]->open();
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
       composite_tuple.clear_tuple();
       composite_tuple.add_tuple(left_oper->current_tuple());
     }
@@ -151,9 +160,16 @@ RC CrossProductOperator::do_sub_query() {
   // 在调用left_oper返回结果时，就已经对内层查询中涉及外层查询的 Expression进行了修改
   while ((rc = left_oper->next()) == RC::SUCCESS) {
     Operator *right_oper = children_[1];
-    right_oper->open();
+    rc = right_oper->open();
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
     // 等待子查询执行完毕
     while ((rc = right_oper->next()) == RC::SUCCESS) {
+    }
+
+    if (rc != RC::RECORD_EOF) {
+      return rc;
     }
 
     CompOp comp = sub_query_unit_->comp();

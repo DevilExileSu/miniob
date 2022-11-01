@@ -30,15 +30,16 @@ public:
     Value value;
     if (tuple_set_.size() == 0) {
       value_init_null(&value);
+      value.type = AttrType::SETS;
       return value;
     }
 
-    if (tuple_set_.size() == 1) {
-      TupleCell cell;
-      tuple_set_[0].find_cell(field, cell);
-      value_init_from_cell(cell, &value);
-      return value;
-    }
+    // if (tuple_set_.size() == 1) {
+    //   TupleCell cell;
+    //   tuple_set_[0].find_cell(field, cell);
+    //   value_init_from_cell(cell, &value);
+    //   return value;
+    // }
 
     Value values[tuple_set_.size()];
     for (size_t i=0; i<tuple_set_.size(); i++) {

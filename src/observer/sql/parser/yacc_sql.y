@@ -111,7 +111,6 @@ ParserContext *get_context(yyscan_t scanner)
 		DATE_T
 		TEXT_T
 		NULL_T
-		LENGTH_T
 		NULLABLE
         HELP
         EXIT
@@ -176,7 +175,6 @@ ParserContext *get_context(yyscan_t scanner)
 %type <number> nullable;
 %type <number> comOp;
 %type <string> alias_ID;
-%type <number> func;
 
 %%
 
@@ -524,6 +522,7 @@ select_clause:
 	}
 	| select_begin select_attr FROM ID alias_ID INNER JOIN ID alias_ID ON condition condition_list join_list where {
 		// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
+
 		selects_append_relation_with_alias(&CONTEXT->selections[CONTEXT->select_num], $8, $9);
 		selects_append_relation_with_alias(&CONTEXT->selections[CONTEXT->select_num], $4, $5);
 
@@ -537,6 +536,7 @@ select_clause:
 									  CONTEXT->cursor_attr[CONTEXT->depth - 1],
 									  CONTEXT->attr_num - CONTEXT->cursor_attr[CONTEXT->depth - 1]);
 
+		CONTEXT->selections[CONTEXT->select_num].is_and = 1;
 		// 状态复原
 		--CONTEXT->depth;
 		CONTEXT->attr_num = CONTEXT->cursor_attr[CONTEXT->depth];
