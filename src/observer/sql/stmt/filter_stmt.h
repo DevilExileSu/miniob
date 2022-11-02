@@ -125,10 +125,10 @@ public:
 public:
   static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
 			const Condition *conditions, int condition_num,
-			FilterStmt *&stmt, std::unordered_map<std::string, std::string> *col_alias_map = nullptr);
+			FilterStmt *&stmt);
 
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-			       const Condition &condition, FilterUnit *&filter_unit, FilterStmt *tmp_stmt, std::unordered_map<std::string, std::string> *col_alias_map = nullptr);
+			       const Condition &condition, FilterUnit *&filter_unit, FilterStmt *tmp_stmt);
 
 private:
   std::unordered_map<std::string, std::vector<FilterUnit *>> single_filter_units_;
