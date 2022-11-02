@@ -645,6 +645,12 @@ select_attr:
 
 attr_list:
     /* empty */
+	| COMMA ID DOT STAR attr_list {
+		RelAttr attr;
+		relation_attr_init(&attr, $2, "*");
+		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
+		CONTEXT->attrs[CONTEXT->attr_num++] = attr;
+	}
     | COMMA ID alias_ID attr_list {
 			RelAttr attr;
 			relation_attr_init_with_alias(&attr, NULL, $2, $3);
