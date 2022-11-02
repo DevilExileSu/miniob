@@ -415,7 +415,7 @@ value:
 		if (res != 0) {
 			CONTEXT->ssql->flag = SCF_INVALID_DATE;
 			yyresult = 2;
-			goto yyreturn;
+			goto yyreturnlab;
 		}
 	}
     |SSS {
@@ -522,6 +522,7 @@ select_clause:
 	}
 	| select_begin select_attr FROM ID alias_ID INNER JOIN ID alias_ID ON condition condition_list join_list where {
 		// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
+
 		selects_append_relation_with_alias(&CONTEXT->selections[CONTEXT->select_num], $8, $9);
 		selects_append_relation_with_alias(&CONTEXT->selections[CONTEXT->select_num], $4, $5);
 
@@ -535,6 +536,7 @@ select_clause:
 									  CONTEXT->cursor_attr[CONTEXT->depth - 1],
 									  CONTEXT->attr_num - CONTEXT->cursor_attr[CONTEXT->depth - 1]);
 
+		CONTEXT->selections[CONTEXT->select_num].is_and = 1;
 		// 状态复原
 		--CONTEXT->depth;
 		CONTEXT->attr_num = CONTEXT->cursor_attr[CONTEXT->depth];
@@ -600,19 +602,19 @@ agg:
 	| agg_func LBRACE STAR COMMA ID RBRACE {
 		CONTEXT->ssql->flag = SCF_INVALID_DATE;
 		yyresult = 2;
-		goto yyreturn;
+		goto yyreturnlab;
 	}
 	| agg_func LBRACE ID COMMA ID RBRACE {
 		// 错误类型
 		CONTEXT->ssql->flag = SCF_INVALID_DATE;
 		yyresult = 2;
-		goto yyreturn;
+		goto yyreturnlab;
 	}
 	| agg_func LBRACE RBRACE {
 		// 错误类型
 		CONTEXT->ssql->flag = SCF_INVALID_DATE;
 		yyresult = 2;
-		goto yyreturn;
+		goto yyreturnlab;
 	}
 	;
 
@@ -687,9 +689,10 @@ condition_list:
     /* empty */
     | AND condition condition_list {
 				// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
+		CONTEXT->selections[CONTEXT->select_num].is_and = 1;
 	}
 	| OR condition condition_list {
-
+	 	CONTEXT->selections[CONTEXT->select_num].is_and = 0;
 	}
     ;
 condition:
@@ -909,7 +912,7 @@ condition:
 		if ($1 != EXISTS_OP && $1 != NOT_EXISTS_OP) {
 			CONTEXT->ssql->flag = SCF_INVALID_DATE;
 			yyresult = 2;
-			goto yyreturn;
+			goto yyreturnlab;
 		}
 		Value right_value;
 		value_init_select(&right_value, &CONTEXT->selections[CONTEXT->select_num - 1]);

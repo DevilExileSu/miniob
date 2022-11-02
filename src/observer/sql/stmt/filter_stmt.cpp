@@ -159,12 +159,19 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
   }
 
+  bool is_sub_select_units = false;
   if (left_condition_value != nullptr && left_condition_value->type == AttrType::SELECTS) {
     tmp_stmt->sub_select_units_.emplace_back(filter_unit);
+    is_sub_select_units = true;
   }
 
   if (right_condition_value != nullptr && right_condition_value->type == AttrType::SELECTS) {
     tmp_stmt->sub_select_units_.emplace_back(filter_unit);
+    is_sub_select_units = true;
+  }
+  
+  if (is_sub_select_units) {
+    return rc;
   }
 
   auto add_filter_unit = [&](std::string table_name) {

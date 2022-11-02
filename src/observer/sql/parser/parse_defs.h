@@ -95,8 +95,7 @@ typedef struct _Condition {
                        // 1时，操作符右边是属性名，0时，是属性值
   RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value right_value;   // right-hand side value if right_is_attr = FALSE
-  int is_and;          // 是and还是or
-  int is_multi_table;  // 是否是多表条件
+  
 } Condition;
 
 // struct of select
@@ -108,6 +107,7 @@ typedef struct {
   char *alias[MAX_NUM];
   size_t condition_num;           // Length of conditions in Where clause
   Condition conditions[MAX_NUM];  // conditions in Where clause
+  int is_and;                     // 条件语句是and还是or
 } Selects;
 
 

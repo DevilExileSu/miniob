@@ -25,6 +25,13 @@ class FilterStmt;
 class Db;
 class Table;
 
+typedef struct {
+  Stmt *select;
+  bool is_left_value;
+  bool has_joint;
+  Table *joint_table;
+} SubSelectStmt;
+
 class SelectStmt : public Stmt
 {
 public:
@@ -35,20 +42,25 @@ public:
   StmtType type() const override { return StmtType::SELECT; }
 public:
   static RC create(Db *db, const Selects &select_sql, Stmt *&stmt);
+  static RC create_sub_select(Db *db, std::unordered_map<std::string, Table *> &table_map, const Selects &select_sql, Stmt *&stmt, bool &has_joint, Table *&joint_table);
   static RC create_sub_select(Db *db, std::unordered_map<std::string, Table *> &table_map, const Selects &select_sql, Stmt *&stmt);
 
 public:
   const std::vector<Table *> &tables() const { return tables_; }
   const std::vector<Field> &query_fields() const { return query_fields_; }
   std::vector<RelAttr> &rel_attrs() { return rel_attrs_; }
-  const std::vector<SelectStmt *> &sub_select_stmts() const { return select_stmts_; }
+  // const std::vector<SelectStmt *> &sub_select_stmts() const { return select_stmts_; }
+  const std::vector<SubSelectStmt> &sub_select_stmts() const { return sub_select_stmts_; }
   FilterStmt *filter_stmt() const { return filter_stmt_; }
   bool is_agg() { return !rel_attrs_.empty(); }
   bool is_single_field(){ return query_fields_.size() == 1; }
+  bool is_and() { return is_and_; }
+
 private:
   std::vector<Field> query_fields_;
   std::vector<Table *> tables_;
   std::vector<RelAttr> rel_attrs_;
   FilterStmt *filter_stmt_ = nullptr;
-  std::vector<SelectStmt *> select_stmts_;
+  std::vector<SubSelectStmt> sub_select_stmts_;
+  bool is_and_ = true;
 };

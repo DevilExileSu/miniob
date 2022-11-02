@@ -109,6 +109,14 @@ public:
   int not_null_count() { return not_null_count_; }
   bool is_null() { return not_null_count_ == 0; }
 
+  void reset() {
+    data_type_ = AttrType::UNDEFINED;
+    min_ = nullptr;
+    max_ = nullptr;
+    count_ = 0;
+    not_null_count_ = 0;
+    sum_ = .0;
+  }
 
 private:
   AttrType data_type_ = AttrType::UNDEFINED;
@@ -139,7 +147,7 @@ public:
 
   Value get_result(Field field) override{
     Value res;
-    // 作为子查询的返回结果
+    // 作为子查询的返回结果，只可能返回一列，所以没有问题
     if (rel_attrs_.size() > 1 || is_null(0)) {
       value_init_null(&res);
       return res;

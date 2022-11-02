@@ -79,6 +79,8 @@ class ValueExpr : public Expression
 {
 public:
   ValueExpr() = default;
+  ValueExpr(TupleCell &&cell): tuple_cell_(cell) 
+  {}
   ValueExpr(const Value &value) : tuple_cell_(value.type, (char *)value.data)
   {
     if (value.type == CHARS) {

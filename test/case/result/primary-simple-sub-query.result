@@ -24,7 +24,7 @@ select * from ssq_1 where id in (select ssq_2.id from ssq_2);
 1 | 4 | 11.2
 2 | 2 | 12
 ID | COL1 | FEAT1
-select * from ssq_1 where col1 not in (select ssq_2.col2 from ssq_2);
+
 1 | 4 | 11.2
 ID | COL1 | FEAT1
 
@@ -109,4 +109,8 @@ select * from ssq_1 where col1 not in (select * from ssq_2);
 FAILURE
 
 
-select * from ssq_1 where not exists (select * from ssq_2 where ssq_2.id > ssq_1.id);
+select * from ssq_1 where exists (select * from ssq_2 where ssq_2.id > ssq_1.id);
+id | col1 | feat1
+1 | 4 | 11.2
+2 | NULL | 12
+3 | 3 | 13.5
