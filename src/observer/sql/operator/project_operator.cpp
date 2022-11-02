@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "common/log/log.h"
+#include "common/lang/string.h"
 #include "sql/operator/project_operator.h"
 #include "storage/record/record.h"
 #include "storage/common/table.h"
@@ -50,14 +51,25 @@ Tuple *ProjectOperator::current_tuple()
   return &tuple_;
 }
 
-void ProjectOperator::add_projection(const Table *table, const FieldMeta *field_meta)
+void ProjectOperator::add_projection(const Table *table, const Field *field)
 {
   // 对单表来说，展示的(alias) 字段总是字段名称，
   // 对多表查询来说，展示的alias 需要带表名字
-  TupleCellSpec *spec = new TupleCellSpec(new FieldExpr(table, field_meta));
-
-  spec->set_alias(field_meta->name());
-  spec->set_table_name(table->name());
+  TupleCellSpec *spec = new TupleCellSpec(new FieldExpr(table, field->meta()));
+  // TODO(vanish): alias: 如果field_meta没有别名，才会使用field_meta->name()
+  if (common::is_blank(field->alias())) {
+    spec->set_alias(field->meta()->name());
+  } else {
+    spec->set_alias(field->alias());
+  }
+  // TODO(vanish): alias: 如果table没有别名，才会使用table->name()
+  // TODO(vanish): 因为别名只在一次查询中有效，因此，添加完毕spec之后，清空table的别名，清空fileld_meta的别名
+  // 在子查询中，后面也会调用该方法能够对其别名进行清空
+  if (common::is_blank(field->table_name_alias())) {
+    spec->set_table_name(table->name());
+  } else {
+    spec->set_table_name(field->table_name_alias());
+  }
   tuple_.add_cell_spec(spec);
 }
 

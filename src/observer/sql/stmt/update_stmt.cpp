@@ -148,7 +148,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
         project_oper.add_child(pred_oper_list[0]);
       }
       for (const Field &field : select_stmt->query_fields()) {
-        project_oper.add_projection(field.table(), field.meta());
+        project_oper.add_projection(field.table(), &field);
       }
 
       if (select_stmt->is_agg()) {
@@ -253,7 +253,7 @@ RC UpdateStmt::create(Db *db, const Updatess &update, Stmt *&stmt)
       project_oper.add_child(pred_oper_list[0]);
 
       for (const Field &field : select_stmt->query_fields()) {
-        project_oper.add_projection(field.table(), field.meta());
+        project_oper.add_projection(field.table(), &field);
       }
 
       AggregateOperator agg_oper(select_stmt->rel_attrs(), select_stmt->query_fields());

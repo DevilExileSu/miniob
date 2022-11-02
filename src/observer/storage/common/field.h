@@ -35,6 +35,20 @@ public:
   const char *table_name() const { return table_->name(); }
   const char *field_name() const { return field_->name(); }
 
+  const char *alias() const { return alias_.c_str(); }
+  void set_alias(const char *alias, const char *table_name_alias)  { 
+    if (alias != nullptr) {
+      alias_ = alias;
+    } 
+    if (table_name_alias != nullptr) {
+      table_name_alias_ = table_name_alias;
+    }
+  }
+  void clear_alias() { alias_.clear(); table_name_alias_.clear(); };
+  const char *table_name_alias() const { return table_name_alias_.c_str(); }
+
+
+
   void set_table(const Table *table)
   {
     this->table_ = table;
@@ -46,4 +60,6 @@ public:
 private:
   const Table *table_ = nullptr;
   const FieldMeta *field_ = nullptr;
+  std::string alias_;
+  std::string table_name_alias_;
 };

@@ -557,7 +557,7 @@ RC do_sub_select(SubSelectStmt sub_select_stmt, FilterUnit *filter_unit,
   }
 
   for (const Field &field : select_stmt->query_fields()) {
-    project_oper->add_projection(field.table(), field.meta());
+    project_oper->add_projection(field.table(), &field);
   }
   
   Expression *expr = nullptr;
@@ -751,7 +751,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   }
   
   for (const Field &field : select_stmt->query_fields()) {
-    project_oper.add_projection(field.table(), field.meta());
+    project_oper.add_projection(field.table(), &field);
   }
   
   if (select_stmt->is_agg()) {

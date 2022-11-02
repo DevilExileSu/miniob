@@ -42,7 +42,7 @@ FilterStmt::~FilterStmt()
 
 RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
 		      const Condition *conditions, int condition_num,
-		      FilterStmt *&stmt)
+		      FilterStmt *&stmt, std::unordered_map<std::string, std::string> *col_alias_map)
 {
   RC rc = RC::SUCCESS;
   stmt = nullptr;
@@ -50,7 +50,7 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
   FilterStmt *tmp_stmt = new FilterStmt();
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
-    rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit, tmp_stmt);
+    rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit, tmp_stmt, col_alias_map);
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;
       LOG_WARN("failed to create filter unit. condition index=%d", i);
@@ -64,8 +64,11 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
 }
 
 RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-		       const RelAttr &attr, Table *&table, const FieldMeta *&field, CompOp comp)
+		       const RelAttr &attr, Table *&table, const FieldMeta *&field, CompOp comp, std::unordered_map<std::string, std::string> *col_alias_map)
 {
+  // TODO(vanish): alias 这里attr.relation_name可能是表的别名
+  // tables包含表别名对应的表，并且是距离当前查询层最近的表
+  // 如果考虑内外层的关联查询这里需要修改逻辑
   if (common::is_blank(attr.relation_name)) {
     table = default_table;
   } else if (nullptr != tables) {
@@ -80,10 +83,19 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
     LOG_WARN("No such table: attr.relation_name: %s", attr.relation_name);
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
+  // TODO(vanish): alias 这里attr.attribute_name可能是列别名
+  // 需要传入一个列别名和列对应的map
   if (common::is_blank(attr.attribute_name) && (comp == CompOp::EXISTS_OP || comp == CompOp::NOT_EXISTS_OP)) {
     field = table->table_meta().field(0);
   } else {
     field = table->table_meta().field(attr.attribute_name);
+    // 判断是否是列别名
+    if (field == nullptr && col_alias_map != nullptr) {
+      auto iter = col_alias_map->find(attr.attribute_name);
+      if (iter !=col_alias_map->end()) {
+        field = table->table_meta().field(iter->second.c_str());
+      }
+    }
   }
   if (nullptr == field) {
     LOG_WARN("no such field in table: table %s, field %s", table->name(), attr.attribute_name);
@@ -95,7 +107,7 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
 }
 
 RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-				  const Condition &condition, FilterUnit *&filter_unit, FilterStmt *tmp_stmt)
+				  const Condition &condition, FilterUnit *&filter_unit, FilterStmt *tmp_stmt, std::unordered_map<std::string, std::string> *col_alias_map)
 {
   RC rc = RC::SUCCESS;
   
@@ -115,7 +127,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   Table *right_table = nullptr;
   if (condition.left_is_attr != 0) {
     const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.left_attr, left_table, field, comp);  
+    rc = get_table_and_field(db, default_table, tables, condition.left_attr, left_table, field, comp, col_alias_map);  
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot find attr");
       return rc;
@@ -130,7 +142,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 
   if (condition.right_is_attr) {
     const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.right_attr, right_table, field, comp);  
+    rc = get_table_and_field(db, default_table, tables, condition.right_attr, right_table, field, comp, col_alias_map);  
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot find attr");
       delete left;

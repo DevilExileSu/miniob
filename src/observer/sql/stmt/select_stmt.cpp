@@ -32,12 +32,14 @@ SelectStmt::~SelectStmt()
   }
 }
 
-static void wildcard_fields(Table *table, std::vector<Field> &field_metas, bool is_agg)
+static void wildcard_fields(Table *table, std::vector<Field> &field_metas, bool is_agg, std::unordered_map<std::string, std::string> &table_alias)
 {
   const TableMeta &table_meta = table->table_meta();
   const int field_num = table_meta.field_num();
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
-    field_metas.push_back(Field(table, table_meta.field(i)));
+    Field field(table, table_meta.field(i));
+    field.set_alias(nullptr, table_alias[table->name()].c_str());
+    field_metas.push_back(field);
     // 如果是agg就用第一列来代替*
     if (is_agg) {
       break;
@@ -45,9 +47,10 @@ static void wildcard_fields(Table *table, std::vector<Field> &field_metas, bool 
   }
 }
 
-RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *> &table_map, const Selects &select_sql, Stmt *&stmt, bool &has_joint, Table *&joint_table) {
+RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *> &table_map, const Selects &select_sql, Stmt *&stmt, bool &has_joint, Table *&joint_table, std::unordered_map<std::string, std::string> &alias2table) {
   
-  std::vector<Table *> tables;
+  std::vector<Table *> tables; 
+  std::unordered_map<std::string, std::string> table_alias;
   for (size_t i = 0; i < select_sql.relation_num; i++) {
     const char *table_name = select_sql.relations[i];
     if (nullptr == table_name) {
@@ -58,13 +61,30 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
     tables.push_back(table);
-    table_map.insert(std::pair<std::string, Table *>(table_name, table));
+    
+
+    
+    table_map.insert(std::make_pair(table_name, table));
+    // (alias): 同层不能有重复别名
+    // (alias): 将表的别名也加入table_map中
+    // 不考虑外层查询和内层查询的关联查询
+    if (select_sql.alias[i] != nullptr) {
+      auto iter = alias2table.find(select_sql.alias[i]);
+      if (iter != alias2table.end()) {
+        return INVALID_ARGUMENT;
+      }
+      alias2table.insert(std::make_pair(select_sql.alias[i], table->name()));
+      table_map.insert(std::make_pair(select_sql.alias[i], table));
+      table_alias.insert(std::make_pair(table->name(), select_sql.alias[i]));
+    }
   }
 
   std::vector<Field> query_fields;
   std::vector<RelAttr> rel_attrs;
   bool is_field = false;
   bool is_agg = false;
+
+  std::unordered_map<std::string, std::string> col_alias_map;
 
   for (int i = select_sql.attr_num - 1; i >= 0; i--) {
     // RelAttr包含聚合函数的处理
@@ -81,15 +101,16 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
     // 2. 检查字段是否有效
     if (common::is_blank(relation_attr.relation_name) && 0 == strcmp(relation_attr.attribute_name, "*")) {
       for (Table *table : tables) {
-        wildcard_fields(table, query_fields, is_agg);
+        wildcard_fields(table, query_fields, is_agg, table_alias);
       }
     } else if (!common::is_blank(relation_attr.relation_name)) {  // TODO
+      // alias: 如果含有列别名需要进行额外的处理，给Field添加alias字段？
       const char *table_name = relation_attr.relation_name;
       const char *field_name = relation_attr.attribute_name;
       // field_name == nullptr 只可能使RelAttr中聚合参数为整型数字
-      // 这里就随便选择一个字段进行统计s
+      // 这里就随便选择一个字段进行统计
       if (field_name == nullptr) {
-        wildcard_fields(tables[0], query_fields, is_agg);
+        wildcard_fields(tables[0], query_fields, is_agg, table_alias);
         continue;
       }
       if (0 == strcmp(table_name, "*")) {
@@ -97,7 +118,7 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
           return RC::SCHEMA_FIELD_MISSING;
         }
         for (Table *table : tables) {
-          wildcard_fields(table, query_fields, is_agg);
+          wildcard_fields(table, query_fields, is_agg, table_alias);
         }
       } else {
         auto iter = table_map.find(table_name);
@@ -107,13 +128,20 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
 
         Table *table = iter->second;
         if (0 == strcmp(field_name, "*")) {
-          wildcard_fields(table, query_fields, is_agg);
+          wildcard_fields(table, query_fields, is_agg, table_alias);
         } else {
           const FieldMeta *field_meta = table->table_meta().field(field_name);
           if (nullptr == field_meta) {
             return RC::SCHEMA_FIELD_MISSING;
           }
-          query_fields.push_back(Field(table, field_meta));
+
+          if (relation_attr.alias != nullptr) {
+            col_alias_map.insert(std::make_pair(relation_attr.alias, relation_attr.attribute_name));
+          }
+          
+          Field field(table, field_meta);
+          field.set_alias(relation_attr.alias, table_alias[table->name()].c_str());
+          query_fields.push_back(field);
         }
       }
     } else {
@@ -126,8 +154,12 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
       if (nullptr == field_meta) {
         return RC::SCHEMA_FIELD_MISSING;
       }
-
-      query_fields.push_back(Field(table, field_meta));
+      if (relation_attr.alias != nullptr) {
+        col_alias_map.insert(std::make_pair(relation_attr.alias, relation_attr.attribute_name));
+      }
+      Field field(table, field_meta);
+      field.set_alias(relation_attr.alias, table_alias[table->name()].c_str());
+      query_fields.push_back(field);
     }
     // 2. 对聚合函数的处理
     if (is_agg) {
@@ -166,6 +198,7 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
   }; 
 
   std::vector<SubSelectStmt> sub_select_stmt;
+  std::unordered_map<std::string, std::string> sub_alias2table;
   for (size_t i = 0; i < select_sql.condition_num; i++) {
     RC rc = RC::SUCCESS;
     if (select_sql.conditions[i].left_is_attr == 1 && select_sql.conditions[i].left_attr.relation_name != nullptr) {
@@ -184,7 +217,7 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
       Selects select = *(Selects *)select_sql.conditions[i].left_value.data;
       Stmt *sub_stmt = nullptr;
       Table *sub_joint_table = nullptr;
-      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table);
+      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table, sub_alias2table);
       if (joint_table == nullptr && sub_joint_table != nullptr) {
         joint_table = sub_joint_table;
       }
@@ -207,7 +240,7 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
       Selects select = *(Selects *)select_sql.conditions[i].right_value.data;
       Stmt *sub_stmt = nullptr;
       Table *sub_joint_table = nullptr;
-      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table);
+      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table, sub_alias2table);
       if (joint_table == nullptr && sub_joint_table != nullptr) {
         joint_table = sub_joint_table;
       }
@@ -230,7 +263,7 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
   RC rc =
-      FilterStmt::create(db, default_table, &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt);
+      FilterStmt::create(db, default_table, &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt, &col_alias_map);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct filter stmt");
     return rc;
@@ -259,6 +292,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   // collect tables in `from` statement
   std::vector<Table *> tables;
   std::unordered_map<std::string, Table *> table_map;
+  std::unordered_map<std::string, std::string> table_alias;
+  std::unordered_map<std::string, std::string> alias2table;
   for (size_t i = 0; i < select_sql.relation_num; i++) {
     const char *table_name = select_sql.relations[i];
     if (nullptr == table_name) {
@@ -273,7 +308,19 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     }
 
     tables.push_back(table);
-    table_map.insert(std::pair<std::string, Table *>(table_name, table));
+    table_map.insert(std::make_pair(table_name, table));
+    // (alias): 同层不能有重复别名
+    // (alias): 将表的别名也加入table_map中
+    if (select_sql.alias[i] != nullptr) {
+      auto iter = alias2table.find(select_sql.alias[i]);
+      if (iter != alias2table.end()) {
+        return INVALID_ARGUMENT;
+      }
+      alias2table.insert(std::make_pair(select_sql.alias[i], table->name()));
+      table_map.insert(std::make_pair(select_sql.alias[i], table));
+      table_alias.insert(std::make_pair(table->name(), select_sql.alias[i]));
+    }
+
   }
   // 反转tables
   std::reverse(tables.begin(), tables.end());
@@ -283,7 +330,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   std::vector<RelAttr> rel_attrs;
   bool is_field = false;
   bool is_agg = false;
-
+  std::unordered_map<std::string, std::string> col_alias_map;
   for (int i = select_sql.attr_num - 1; i >= 0; i--) {
     // RelAttr包含聚合函数的处理
     const RelAttr &relation_attr = select_sql.attributes[i];
@@ -302,15 +349,16 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     // 2. 检查字段是否有效
     if (common::is_blank(relation_attr.relation_name) && 0 == strcmp(relation_attr.attribute_name, "*")) {
       for (Table *table : tables) {
-        wildcard_fields(table, query_fields, is_agg);
+        wildcard_fields(table, query_fields, is_agg, table_alias);
       }
     } else if (!common::is_blank(relation_attr.relation_name)) {  // TODO
       const char *table_name = relation_attr.relation_name;
       const char *field_name = relation_attr.attribute_name;
       // field_name == nullptr 只可能使RelAttr中聚合参数为整型数字
       // 这里就随便选择一个字段进行统计s
+      // TODO(vanish): alias: 如果含有列别名需要进行额外的处理，给Field添加alias字段？ 
       if (field_name == nullptr) {
-        wildcard_fields(tables[0], query_fields, is_agg);
+        wildcard_fields(tables[0], query_fields, is_agg, table_alias);
         continue;
       }
       if (0 == strcmp(table_name, "*")) {
@@ -319,7 +367,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
           return RC::SCHEMA_FIELD_MISSING;
         }
         for (Table *table : tables) {
-          wildcard_fields(table, query_fields, is_agg);
+          wildcard_fields(table, query_fields, is_agg, table_alias);
         }
       } else {
         auto iter = table_map.find(table_name);
@@ -330,15 +378,19 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
 
         Table *table = iter->second;
         if (0 == strcmp(field_name, "*")) {
-          wildcard_fields(table, query_fields, is_agg);
+          wildcard_fields(table, query_fields, is_agg, table_alias);
         } else {
           const FieldMeta *field_meta = table->table_meta().field(field_name);
           if (nullptr == field_meta) {
             LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
             return RC::SCHEMA_FIELD_MISSING;
           }
-
-          query_fields.push_back(Field(table, field_meta));
+          if (relation_attr.alias != nullptr) {
+            col_alias_map.insert(std::make_pair(relation_attr.alias, relation_attr.attribute_name));
+          }
+          Field field(table, field_meta);
+          field.set_alias(relation_attr.alias, table_alias[table->name()].c_str());
+          query_fields.push_back(field);
         }
       }
     } else {
@@ -353,8 +405,12 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
         LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name);
         return RC::SCHEMA_FIELD_MISSING;
       }
-
-      query_fields.push_back(Field(table, field_meta));
+      if (relation_attr.alias != nullptr) {
+        col_alias_map.insert(std::make_pair(relation_attr.alias, relation_attr.attribute_name));
+      }
+      Field field(table, field_meta);
+      field.set_alias(relation_attr.alias, table_alias[table->name()].c_str());
+      query_fields.push_back(field);
     }
     // 2. 对聚合函数的处理
     if (is_agg) {
@@ -373,6 +429,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     default_table = tables[0];
   }
   std::vector<SubSelectStmt> sub_select_stmt;
+  std::unordered_map<std::string, std::string> sub_alias2table;
   for (size_t i = 0; i < select_sql.condition_num; i++) {
     RC rc = RC::SUCCESS;
     if (select_sql.conditions[i].left_is_attr == 0 && select_sql.conditions[i].left_value.type == AttrType::SELECTS) {
@@ -380,7 +437,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
       Stmt *sub_stmt = nullptr;
       bool has_joint = false;
       Table *sub_joint_table = nullptr;
-      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table);
+      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table, sub_alias2table);
       if (!has_joint && sub_joint_table == nullptr) {
         sub_joint_table = default_table;
       }
@@ -397,7 +454,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
       Stmt *sub_stmt = nullptr;
       bool has_joint = false;
       Table *sub_joint_table = nullptr;
-      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table);
+      rc = SelectStmt::create_sub_select(db, table_map, select, sub_stmt, has_joint, sub_joint_table, sub_alias2table);
       if (!has_joint && sub_joint_table == nullptr) {
         sub_joint_table = default_table;
       }
@@ -417,7 +474,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
   RC rc =
-      FilterStmt::create(db, default_table, &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt);
+      FilterStmt::create(db, default_table, &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt, &col_alias_map);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct filter stmt");
     return rc;

@@ -74,7 +74,6 @@ protected:
   std::string name_;
   std::vector<FieldMeta> fields_;  // 包含sys_fields
   std::vector<IndexMeta> indexes_;
-
   int record_size_ = 0;
 
   //@@@ TODO why used static variable?

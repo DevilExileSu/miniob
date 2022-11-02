@@ -675,8 +675,8 @@ alias_ID:
 
 rel_list:
     /* empty */
-    | COMMA ID rel_list {	
-		selects_append_relation(&CONTEXT->selections[CONTEXT->select_num], $2);
+    | COMMA ID alias_ID rel_list {	
+		selects_append_relation_with_alias(&CONTEXT->selections[CONTEXT->select_num], $2, $3);
 	}
     ;
 where:
