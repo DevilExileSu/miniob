@@ -575,42 +575,42 @@ agg_func:
 
 
 agg:
- 	agg_func LBRACE STAR RBRACE {
+ 	agg_func LBRACE STAR RBRACE alias_ID {
 		RelAttr attr;
-		relation_attr_init_with_agg(&attr, NULL, "*", $1);
+		relation_attr_init_with_agg(&attr, NULL, "*", $1, $5);
 		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
 		CONTEXT->attrs[CONTEXT->attr_num++] = attr;
 	}
-	| agg_func LBRACE ID RBRACE {
+	| agg_func LBRACE ID RBRACE alias_ID {
 		RelAttr attr;
-		relation_attr_init_with_agg(&attr, NULL, $3, $1);
+		relation_attr_init_with_agg(&attr, NULL, $3, $1, $5);
 		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
 		CONTEXT->attrs[CONTEXT->attr_num++] = attr;
 	}
-	| agg_func LBRACE ID DOT ID RBRACE {
+	| agg_func LBRACE ID DOT ID RBRACE alias_ID {
 		RelAttr attr;
-		relation_attr_init_with_agg(&attr, $3, $5, $1);
+		relation_attr_init_with_agg(&attr, $3, $5, $1, $7);
 		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
 		CONTEXT->attrs[CONTEXT->attr_num++] = attr;
 	}
-	| agg_func LBRACE NUMBER RBRACE {
+	| agg_func LBRACE NUMBER RBRACE alias_ID {
 		RelAttr attr;
-		relation_attr_init_with_agg_num(&attr, $1, $3);
+		relation_attr_init_with_agg_num(&attr, $1, $3, $5);
 		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
 		CONTEXT->attrs[CONTEXT->attr_num++] = attr;
 	}
-	| agg_func LBRACE STAR COMMA ID RBRACE {
+	| agg_func LBRACE STAR COMMA ID RBRACE alias_ID {
 		CONTEXT->ssql->flag = SCF_INVALID_DATE;
 		yyresult = 2;
 		goto yyreturnlab;
 	}
-	| agg_func LBRACE ID COMMA ID RBRACE {
+	| agg_func LBRACE ID COMMA ID RBRACE alias_ID {
 		// 错误类型
 		CONTEXT->ssql->flag = SCF_INVALID_DATE;
 		yyresult = 2;
 		goto yyreturnlab;
 	}
-	| agg_func LBRACE RBRACE {
+	| agg_func LBRACE RBRACE alias_ID {
 		// 错误类型
 		CONTEXT->ssql->flag = SCF_INVALID_DATE;
 		yyresult = 2;
@@ -619,7 +619,12 @@ agg:
 	;
 
 select_attr:
-    STAR attr_list {  
+    STAR alias_ID attr_list {  
+			if ($2 != NULL) {
+				CONTEXT->ssql->flag = SCF_INVALID_DATE;
+				yyresult = 2;
+				goto yyreturnlab;
+			}
 			RelAttr attr;
 			relation_attr_init(&attr, NULL, "*");
 			// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
@@ -637,15 +642,19 @@ select_attr:
 			// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
 			CONTEXT->attrs[CONTEXT->attr_num++] = attr;
 		}
-	| agg alias_ID attr_list {
-		// agg 先初始化RelAttr之后，再进入该判断逻辑
-		CONTEXT->attrs[CONTEXT->attr_num-1].alias = $2;
+	| agg attr_list {
+
 	}
     ;
 
 attr_list:
     /* empty */
-	| COMMA ID DOT STAR attr_list {
+	| COMMA ID DOT STAR alias_ID attr_list {
+		if ($5 != NULL) {
+			CONTEXT->ssql->flag = SCF_INVALID_DATE;
+			yyresult = 2;
+			goto yyreturnlab;
+		}
 		RelAttr attr;
 		relation_attr_init(&attr, $2, "*");
 		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
@@ -667,8 +676,8 @@ attr_list:
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].attribute_name=$4;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].relation_name=$2;
   	  }
-	| COMMA agg alias_ID attr_list {
-		CONTEXT->attrs[CONTEXT->attr_num-1].alias = $3;
+	| COMMA agg attr_list {
+		// CONTEXT->attrs[CONTEXT->attr_num - 1].alias = $3;
 	}
   	;
 
@@ -676,7 +685,7 @@ alias_ID:
 	/* empty */
 	{ $$ = NULL; }
 	| ID { $$ = $1; }
-	| AS ID { $$=$2; }
+	| AS ID { $$ = $2; }
 	;
 
 rel_list:
@@ -824,6 +833,26 @@ condition:
 			// $$->right_attr.attribute_name = $5;
 									
     }
+	|ID comOp ID DOT ID {
+		RelAttr left_attr;
+		relation_attr_init(&left_attr, NULL, $1);
+		RelAttr right_attr;
+		relation_attr_init(&right_attr, $3, $5);
+
+		Condition condition;
+		condition_init(&condition, $2, 1, &left_attr, NULL, 1, &right_attr, NULL);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+	}
+	|ID DOT ID comOp ID {
+		RelAttr left_attr;
+		relation_attr_init(&left_attr, $1, $3);
+		RelAttr right_attr;
+		relation_attr_init(&right_attr, NULL, $5);
+
+		Condition condition;
+		condition_init(&condition, $4, 1, &left_attr, NULL, 1, &right_attr, NULL);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+	}
     |ID DOT ID comOp ID DOT ID
 		{
 			RelAttr left_attr;

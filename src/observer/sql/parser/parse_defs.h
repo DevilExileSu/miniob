@@ -248,8 +248,8 @@ extern "C" {
 void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const char *attribute_name);
 void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, const char *alias_name);
 void relation_attr_destroy(RelAttr *relation_attr);
-void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, AggFunc agg);
-void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num);
+void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, AggFunc agg, const char *alias_name);
+void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num, const char *alias_name);
 
 void value_init_integer(Value *value, int v);
 void value_init_float(Value *value, float v);
