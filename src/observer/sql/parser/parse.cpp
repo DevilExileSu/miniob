@@ -205,6 +205,8 @@ void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr
   } else {
     condition->right_value = *right_value;
   }
+  condition->left_expr = nullptr;
+  condition->right_expr = nullptr;
 }
 void condition_destroy(Condition *condition)
 {
@@ -220,6 +222,83 @@ void condition_destroy(Condition *condition)
   }
 }
 
+void condition_init_with_exp(Condition *condition, CompOp comp, Exp *left_expr, Exp *right_expr) {
+  condition->comp = comp;
+
+  // 如果表达式为叶子节点，即Value或RelAttr
+  if (left_expr->expr_type == NodeType::VAL) {
+    condition->left_value = *left_expr->value;
+    condition->left_is_attr = 0;
+  } else if (left_expr->expr_type == NodeType::ATTR) {
+    condition->left_attr = *left_expr->attr; 
+    condition->left_is_attr = 1;
+  } else {
+    condition->left_expr = left_expr;
+  }
+
+  if (right_expr->expr_type == NodeType::VAL) {
+    condition->right_value = *right_expr->value;
+    condition->right_is_attr = 0;
+  } else if (right_expr->expr_type == NodeType::ATTR) {
+    condition->right_attr = *right_expr->attr;
+    condition->right_is_attr = 1;
+  } else {
+    condition->right_expr = right_expr;
+  }
+}
+
+Exp *create_expression(Exp *left_expr, Exp *right_expr, Value *value, RelAttr *relation_attr, NodeType node_type) {
+  Exp *exp = (Exp *)malloc(sizeof(Exp));
+  exp->expr_type = node_type;
+
+
+  if (value != nullptr) {
+    exp->value = (Value *)malloc(sizeof(Value));
+    *exp->value = *value;
+  } else {
+    exp->value = nullptr;
+  }
+  if (relation_attr != nullptr) {
+    exp->attr = (RelAttr *)malloc(sizeof(RelAttr));
+    *exp->attr = *relation_attr;
+  } else {
+    exp->attr = nullptr;
+  }
+  
+  if (right_expr != nullptr) {
+    exp->right_expr = right_expr;
+  } else {
+    exp->right_expr = nullptr;
+  }
+
+  if (left_expr != nullptr) {
+    exp->left_expr = left_expr;
+  } else {
+    exp->left_expr = nullptr;
+  }
+  return exp;
+}
+
+void expression_destroy(Exp *exp)
+{
+
+  exp->expr_type = NO_EXP;
+  if (exp->value != nullptr) {
+    value_destroy(exp->value);
+    exp->value = nullptr;
+  }
+  if (exp->attr != nullptr) {
+    relation_attr_destroy(exp->attr);
+    exp->attr = nullptr;
+  }
+  if (exp->left_expr != nullptr) {
+    expression_destroy(exp->left_expr);
+  }
+  
+  if (exp->right_expr != nullptr) {
+    expression_destroy(exp->right_expr);
+  }
+}
 void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length, int nullable)
 {
   attr_info->name = strdup(name);
@@ -251,6 +330,17 @@ void selects_append_relation_with_alias(Selects *selects, const char *relation_n
     selects->alias[selects->relation_num] = nullptr; 
   }
   selects->relations[selects->relation_num++] = strdup(relation_name);
+}
+
+
+// 主要是针对聚合函数的表达式计算
+// 不考虑别名
+void selects_append_expressions(Selects *selects, Exp *expression[], size_t begin, size_t expr_num) {
+  assert(expr_num <= sizeof(selects->exp) / sizeof(expression[0]));
+  for (size_t i=0; i < expr_num; i++ ){
+    selects->exp[i] = expression[i+begin];
+  }
+  selects->expr_num = expr_num;
 }
 
 void selects_append_attribute_list(Selects *selects, RelAttr attr_list[], size_t begin, size_t attr_num) {

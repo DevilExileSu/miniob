@@ -41,6 +41,9 @@ QUOTE            [\'\"]
 ";"                                                  RETURN_TOKEN(SEMICOLON);
 {DOT}                                                RETURN_TOKEN(DOT);
 "*"                                                  RETURN_TOKEN(STAR);
+"+"                                                  RETURN_TOKEN(ADD_T);
+"-"                                                  RETURN_TOKEN(SUB_T);
+"/"                                                  RETURN_TOKEN(DIV_T);
 [Ee][Xx][Ii][Tt]                                     RETURN_TOKEN(EXIT);
 [Hh][Ee][Ll][Pp]                                     RETURN_TOKEN(HELP);
 [Dd][Ee][Ss][Cc]                                     RETURN_TOKEN(DESC);
