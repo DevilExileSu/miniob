@@ -57,18 +57,20 @@ void ProjectOperator::add_projection(const Table *table, const Field *field)
   // 对多表查询来说，展示的alias 需要带表名字
   TupleCellSpec *spec = new TupleCellSpec(new FieldExpr(table, field->meta()));
   // TODO(vanish): alias: 如果field_meta没有别名，才会使用field_meta->name()
+  // 只有当列的别名为空时，才会设置表名
   if (common::is_blank(field->alias())) {
+    // TODO(vanish): alias: 如果table没有别名，才会使用table->name()
+    // TODO(vanish): 因为别名只在一次查询中有效，因此，添加完毕spec之后，清空table的别名，清空fileld_meta的别名
+    // 在子查询中，后面也会调用该方法能够对其别名进行清空
+    if (common::is_blank(field->table_name_alias())) {
+      spec->set_table_name(table->name());
+    } else {
+      spec->set_table_name(field->table_name_alias());
+    }
     spec->set_alias(field->meta()->name());
   } else {
+    // 如果列别名为空，不添加table的名称
     spec->set_alias(field->alias());
-  }
-  // TODO(vanish): alias: 如果table没有别名，才会使用table->name()
-  // TODO(vanish): 因为别名只在一次查询中有效，因此，添加完毕spec之后，清空table的别名，清空fileld_meta的别名
-  // 在子查询中，后面也会调用该方法能够对其别名进行清空
-  if (common::is_blank(field->table_name_alias())) {
-    spec->set_table_name(table->name());
-  } else {
-    spec->set_table_name(field->table_name_alias());
   }
   tuple_.add_cell_spec(spec);
 }
