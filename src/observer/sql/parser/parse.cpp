@@ -59,9 +59,9 @@ void relation_attr_destroy(RelAttr *relation_attr)
   if (relation_attr->relation_name != nullptr) {
     free(relation_attr->relation_name);
   } 
-  // if (relation_attr->attribute_name != nullptr) {
-  //   free(relation_attr->attribute_name);
-  // }
+  if (relation_attr->attribute_name != nullptr) {
+    free(relation_attr->attribute_name);
+  }
   if (relation_attr->alias != nullptr) {
     free(relation_attr->alias);
   }
@@ -219,20 +219,20 @@ void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr
 }
 void condition_destroy(Condition *condition)
 {
-  if (condition->left_is_attr) {
+  if (condition->left_is_attr == 1) {
     relation_attr_destroy(&condition->left_attr);
-  } else {
+  } else if (condition->left_is_attr == 0){
     value_destroy(&condition->left_value);
   }
-  if (condition->right_is_attr) {
+  if (condition->right_is_attr == 1) {
     relation_attr_destroy(&condition->right_attr);
-  } else {
+  } else if (condition->right_is_attr == 0){
     value_destroy(&condition->right_value);
   }
-  if (condition->left_expr != nullptr) {
+  if (condition->left_is_attr == -1 && condition->left_expr != nullptr) {
     expression_destroy(condition->left_expr);
   }
-  if (condition->right_expr != nullptr) {
+  if (condition->left_is_attr == -1 && condition->right_expr != nullptr) {
     expression_destroy(condition->right_expr);
   }
 }
