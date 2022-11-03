@@ -298,18 +298,29 @@ Exp *create_expression(Exp *left_expr, Exp *right_expr, Value *value, RelAttr *r
   return exp;
 }
 
+// 在条件语句中出现的attribute_name，但是select中没有出现
+// 可能导致内存没有回收，value也是一样
 void expression_destroy(Exp *exp)
 {
   if (exp->expr_type == NO_EXP) {
     return;
   }
+  
+  if (exp->expr_type == VAL) {
+    value_destroy(exp->value);
+    exp->left_expr == nullptr;
+    exp->right_expr == nullptr;
+    return;
+  }
   exp->expr_type = NO_EXP;
   if (exp->left_expr != nullptr) {
     expression_destroy(exp->left_expr);
+    exp->left_expr == nullptr;
   }
-  
+
   if (exp->right_expr != nullptr) {
     expression_destroy(exp->right_expr);
+    exp->right_expr == nullptr;
   }
 }
 void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length, int nullable)
@@ -398,6 +409,7 @@ void selects_destroy(Selects *selects)
   for (size_t i = 0; i < selects->condition_num; i++) {
     condition_destroy(&selects->conditions[i]);
   }
+  selects->expr_num = 0;
 
   for (size_t i=0; i<selects->expr_num; i++) {
     expression_destroy(selects->exp[i]);
