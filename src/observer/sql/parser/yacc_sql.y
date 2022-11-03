@@ -557,7 +557,7 @@ exp:
 			goto yyreturnlab;
 		}
 		RelAttr attr;
-		relation_attr_init(&attr, NULL, "*");
+		relation_attr_init(&attr, $1, "*");
 		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
 		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
 		$$ = create_expression(NULL, NULL, NULL, &attr, ATTR);

@@ -1,7 +1,7 @@
 INITIALIZATION
-create table exp_table(id int, col1 int, col2 int, col3 float, col4 float);
+create table exp_table(id int, col1 int nullable, col2 int, col3 float, col4 float);
 SUCCESS
-insert into exp_table VALUES (1, 1, 1, 1.0, 1.5);
+insert into exp_table VALUES (1, NULL, 1, 1.0, 1.5);
 SUCCESS
 insert into exp_table VALUES (2, 2, -2, 5.5, 1.0);
 SUCCESS

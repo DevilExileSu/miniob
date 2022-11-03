@@ -229,10 +229,10 @@ void condition_destroy(Condition *condition)
   } else if (condition->right_is_attr == 0){
     value_destroy(&condition->right_value);
   }
-  if (condition->left_is_attr == -1 && condition->left_expr != nullptr) {
+  if (condition->left_expr != nullptr) {
     expression_destroy(condition->left_expr);
   }
-  if (condition->left_is_attr == -1 && condition->right_expr != nullptr) {
+  if (condition->right_expr != nullptr) {
     expression_destroy(condition->right_expr);
   }
 }

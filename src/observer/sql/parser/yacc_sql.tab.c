@@ -2004,7 +2004,7 @@ yyreduce:
 			goto yyreturnlab;
 		}
 		RelAttr attr;
-		relation_attr_init(&attr, NULL, "*");
+		relation_attr_init(&attr, (yyvsp[-3].string), "*");
 		// CONTEXT->select_attrs[CONTEXT->select_num][CONTEXT->select_attr_num[CONTEXT->select_num]++] = attr;
 		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
 		(yyval.exp1) = create_expression(NULL, NULL, NULL, &attr, ATTR);
