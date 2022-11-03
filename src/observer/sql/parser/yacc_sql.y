@@ -105,6 +105,9 @@ ParserContext *get_context(yyscan_t scanner)
         TRX_BEGIN
         TRX_COMMIT
         TRX_ROLLBACK
+		ADD_T
+		SUB_T
+		DIV_T
         INT_T
         STRING_T
         FLOAT_T
@@ -145,9 +148,7 @@ ParserContext *get_context(yyscan_t scanner)
         LE
         GE
         NE
-		ADD_T
-		SUB_T
-		DIV_T
+		
 
 %union {
   struct _Attr *attr1;
@@ -400,7 +401,7 @@ tuple_list:
 
 
 tuple: 
-	LBRACE value value_list RBRACE {
+	LBRACE value_with_neg value_list RBRACE {
 		insert_init(&CONTEXT->insert_list[CONTEXT->insert_num++], CONTEXT->values, CONTEXT->value_length);
 		CONTEXT->value_length=0;
 	}
@@ -408,7 +409,7 @@ tuple:
 
 value_list:
     /* empty */
-    | COMMA value value_list  { 
+    | COMMA value_with_neg value_list  { 
   		// CONTEXT->values[CONTEXT->value_length++] = *$2;
 	  }
     ;
@@ -436,7 +437,17 @@ value:
 		value_init_null(&CONTEXT->values[CONTEXT->value_length++]);
 	}
     ;
-    
+
+value_with_neg:
+	value {
+	}
+	| SUB_T NUMBER {
+		value_init_integer(&CONTEXT->values[CONTEXT->value_length++], $2 * -1);
+	}
+	| SUB_T FLOAT {
+		value_init_float(&CONTEXT->values[CONTEXT->value_length++], $2 * -1.0);
+	}
+
 delete:		/*  delete 语句的语法解析树*/
     DELETE FROM ID where SEMICOLON 
 		{
@@ -476,7 +487,7 @@ modify_list:
 	;
 
 modify_expr: 
-	ID EQ value {
+	ID EQ value_with_neg {
 		updates_append_value(&CONTEXT->ssql->sstr.updates, &CONTEXT->values[CONTEXT->value_length - 1], $1);
 	}
 	| ID EQ LBRACE select_clause RBRACE{
@@ -497,9 +508,20 @@ modify_expr:
 exp: 
 	exp ADD_T exp { $$ = create_expression($1, $3, NULL, NULL, ADD); }
 	| exp SUB_T exp { $$ = create_expression($1, $3, NULL, NULL, SUB); }
+	| SUB_T exp {
+		// Value left_value;
+		// value_init_integer(&left_value, 0);
+		// Exp *left_exp = create_expression(NULL, NULL, &left_value, NULL, VAL);
+		$$ = create_expression(NULL, $2, NULL, NULL, SUB);
+	}
 	| exp STAR exp { $$ = create_expression($1, $3, NULL, NULL, MUL); }
 	| exp DIV_T exp { $$ = create_expression($1, $3, NULL, NULL, DIV); }
-	| LBRACE exp RBRACE { $$ = $2; }
+	| LBRACE exp RBRACE { 
+		Exp *exp = $2;
+		++exp->lbrace;
+		++exp->rbrace;
+		$$ = exp; 
+	}
 	| value { 
 		$$ = create_expression(NULL, NULL, &CONTEXT->values[CONTEXT->value_length - 1], NULL, VAL); 
 	}
@@ -697,6 +719,9 @@ agg:
 	}
 	;
 
+// 原先这里是匹配attr_list规则之后再去执行{}内的内容，导致全局的CONTEXT->attrs是逆序存放的
+// 这就导致实际添加到select中的RelAttr也是逆序的
+// 现在使用exp代替之后，我们会按照顺序的进行添加，因此，在执行selects的create时，不需要逆序遍历
 select_attr:
 	exp attr_list {
 		CONTEXT->expressions[CONTEXT->expr_num++] = $1;
@@ -737,16 +762,15 @@ where:
 
 condition_list:
     /* empty */
-    | conjunction condition condition_list {
+    | AND condition condition_list {
 				// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
-		
+		CONTEXT->selections[CONTEXT->select_num].is_and = 1; 
+	}
+	| OR condition condition_list {
+		CONTEXT->selections[CONTEXT->select_num].is_and = 0;
 	}
     ;
 
-conjunction:
-	AND { CONTEXT->selections[CONTEXT->select_num].is_and = 1; }
-	| OR  { CONTEXT->selections[CONTEXT->select_num].is_and = 0; }
-	;
 
 condition:
 	exp comOp exp {
@@ -755,6 +779,24 @@ condition:
 		Condition condition;
 		condition_init_with_exp(&condition, $2, left_exp, right_exp);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		CONTEXT->value_length = CONTEXT->cursor_value[CONTEXT->depth - 1];
+	}
+	| exp comOp LBRACE value COMMA value value_list RBRACE {
+		// comOp只能是in/not in, exists/not exists
+		// 同除了包含LBRACE value value_list RBRACE的条件语句，comOp都只能是非in/not in, exists/not exists
+		// RelAttr left_attr;
+		// relation_attr_init(&left_attr, NULL, $1);
+		Exp *left_exp  = $1;
+		Value right_value;
+		value_init_set(&right_value, CONTEXT->values, CONTEXT->cursor_value[CONTEXT->depth], CONTEXT->value_length - CONTEXT->cursor_value[CONTEXT->depth]);
+		Exp *right_exp = create_expression(NULL, NULL, &right_value, NULL, VAL);
+
+		Condition condition;
+
+		condition_init_with_exp(&condition, $2, left_exp, right_exp);
+		// condition_init(&condition, $2, 1, &left_attr, NULL, 0, NULL, &right_value);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		/// 复原同一深度的cursor_value[]，防止和同一深度其他的SETS类型value冲突
 		CONTEXT->value_length = CONTEXT->cursor_value[CONTEXT->depth - 1];
 	}
 	| LBRACE select_clause RBRACE comOp exp {

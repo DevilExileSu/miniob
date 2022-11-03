@@ -24,6 +24,7 @@ enum class ExprType {
   NONE,
   FIELD,
   VALUE,
+  TREE,
 };
 
 class Expression
@@ -36,13 +37,17 @@ public:
   virtual ExprType type() const = 0;
 };
 
+// 需要对聚合进行额外的处理
+// 如果是对字段进行聚合处理
+// 需要获取tuple中对应的AggFunc结果
 class FieldExpr : public Expression
 {
 public:
   FieldExpr() = default;
   FieldExpr(const Table *table, const FieldMeta *field) : field_(table, field)
   {}
-
+  FieldExpr(const Table *table, const FieldMeta *field, AggFunc agg_func) : field_(table, field), agg_func_(agg_func)
+  {}
   virtual ~FieldExpr() = default;
 
   ExprType type() const override
@@ -70,9 +75,14 @@ public:
     return field_.field_name();
   }
 
+  const AggFunc agg_func() const {
+    return agg_func_;
+  }
+
   RC get_value(const Tuple &tuple, TupleCell &cell) const override;
 private:
   Field field_;
+  AggFunc agg_func_ = AggFunc::NONE;
 };
 
 class ValueExpr : public Expression
@@ -105,4 +115,148 @@ public:
 
 private:
   TupleCell tuple_cell_;
+};
+
+
+
+// 除了叶子节点只存储运算符，叶子节点存放FieldExpr或ValueExpr
+class TreeExpr : public Expression
+{
+public:
+  TreeExpr() = default;
+  TreeExpr(Exp *exp) {
+    expr_type_ = exp->expr_type;
+    lbrace_ = exp->lbrace;
+    rbrace_ = exp->rbrace;
+  }
+
+  virtual  ~TreeExpr() = default;
+
+  ExprType type() const override 
+  {
+    return ExprType::TREE;
+  }
+
+  RC get_value(const Tuple &tuple, TupleCell &cell) const override;
+
+  void set_left(Expression *left) {
+    left_ = left;
+  }
+
+  void set_right(Expression *right) {
+    right_ = right;
+  }
+
+  // 后序遍历输出原表达式
+  void to_string(std::ostream &os, bool is_multi_table) {
+    for (int i=0; i<lbrace_; i++) {
+      os << '(';
+    }
+    // 不考虑别名
+    if (left_ != nullptr && left_->type() == ExprType::FIELD) {
+      FieldExpr *field = static_cast<FieldExpr *>(left_);
+      switch (field->agg_func()) {
+      case MAX: {
+        os << "max(";
+      } break;
+      case MIN: {
+        os << "min(";
+      } break;
+      case AVG: {
+        os << "avg(";
+      } break;
+      case COUNT: {
+        os << "count(" ;
+      } break; 
+      case SUM: { 
+        os<< "sum(";
+      } break; 
+      default:
+        break;
+      }
+      if (is_multi_table) {
+        os << field->table_name() << '.';
+      }
+      os << field->field_name();
+      if (field->agg_func() != AggFunc::NONE) {
+        os << ')';
+      }
+    } else if (left_ != nullptr && left_->type() == ExprType::VALUE) {
+      ValueExpr *value = static_cast<ValueExpr *>(left_);
+      TupleCell cell;
+      value->get_tuple_cell(cell);
+      cell.to_string(os);
+    } else if (left_ != nullptr){
+      TreeExpr *tree = static_cast<TreeExpr *>(left_);
+      tree->to_string(os, is_multi_table);
+    }
+
+    switch (expr_type_)
+    {
+    case ADD: {
+      os << '+';
+    } break;
+    case SUB: {
+      os << '-';
+    } break;
+    case DIV: {
+      os << '/';
+    } break;
+    case MUL: {
+      os << "*";
+    }
+    default:
+      break;
+    }
+
+    if (right_->type() == ExprType::FIELD) {
+
+      FieldExpr *field = static_cast<FieldExpr *>(right_);
+      switch (field->agg_func()) {
+      case MAX: {
+        os << "max(";
+      } break;
+      case MIN: {
+        os << "min(";
+      } break;
+      case AVG: {
+        os << "avg(";
+      } break;
+      case COUNT: {
+        os << "count(" ;
+      } break; 
+      case SUM: { 
+        os<< "sum(";
+      } break; 
+      default:
+        break;
+      }
+      if (is_multi_table) {
+        os << field->table_name() << '.';
+      }
+      os << field->field_name();
+      if (field->agg_func() != AggFunc::NONE) {
+        os << ')';
+      }
+    } else if (right_->type() == ExprType::VALUE) {
+      ValueExpr *value = static_cast<ValueExpr *>(right_);
+      TupleCell cell;
+      value->get_tuple_cell(cell);
+      cell.to_string(os);
+    } else {
+      TreeExpr *tree = static_cast<TreeExpr *>(right_);
+      tree->to_string(os, is_multi_table);
+    }
+    
+    for (int i=0; i<rbrace_; i++) {
+      os << ')';
+    }
+  }
+
+private:
+  Expression *left_ = nullptr;
+  Expression *right_ = nullptr;
+  int lbrace_ = 0;
+  int rbrace_ = 0;
+  NodeType expr_type_;
 };

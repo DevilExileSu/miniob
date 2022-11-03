@@ -100,7 +100,9 @@ typedef struct _Exp{
   NodeType expr_type;
   Value *value;
   RelAttr *attr;
-
+  // 用来打印表达式
+  int lbrace;
+  int rbrace;
   struct _Exp *left_expr;
   struct _Exp *right_expr;
 

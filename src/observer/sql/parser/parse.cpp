@@ -48,7 +48,7 @@ void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_
   } else {
     relation_attr->alias = nullptr;
   }
-  relation_attr->attribute_name = strdup(attribute_name);
+  relation_attr->attribute_name =  strdup(attribute_name);
   relation_attr->agg_func = AggFunc::NONE;
   relation_attr->is_num = 0;
 }
@@ -56,9 +56,15 @@ void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_
 
 void relation_attr_destroy(RelAttr *relation_attr)
 {
-  free(relation_attr->relation_name);
-  free(relation_attr->attribute_name);
-  free(relation_attr->alias);
+  if (relation_attr->relation_name != nullptr) {
+    free(relation_attr->relation_name);
+  } 
+  // if (relation_attr->attribute_name != nullptr) {
+  //   free(relation_attr->attribute_name);
+  // }
+  if (relation_attr->alias != nullptr) {
+    free(relation_attr->alias);
+  }
   relation_attr->relation_name = nullptr;
   relation_attr->attribute_name = nullptr;
   relation_attr->alias = nullptr;
@@ -156,6 +162,9 @@ int value_init_date(Value *value, const char *v) {
 
 void value_destroy(Value *value)
 {
+  if (value->type == UNDEFINED && value->data == nullptr) {
+    return;
+  }
   value->type = UNDEFINED;
   free(value->data);
   value->data = nullptr;
@@ -220,6 +229,12 @@ void condition_destroy(Condition *condition)
   } else {
     value_destroy(&condition->right_value);
   }
+  if (condition->left_expr != nullptr) {
+    expression_destroy(condition->left_expr);
+  }
+  if (condition->right_expr != nullptr) {
+    expression_destroy(condition->right_expr);
+  }
 }
 
 void condition_init_with_exp(Condition *condition, CompOp comp, Exp *left_expr, Exp *right_expr) {
@@ -234,6 +249,7 @@ void condition_init_with_exp(Condition *condition, CompOp comp, Exp *left_expr, 
     condition->left_is_attr = 1;
   } else {
     condition->left_expr = left_expr;
+    condition->left_is_attr = -1;
   }
 
   if (right_expr->expr_type == NodeType::VAL) {
@@ -244,6 +260,7 @@ void condition_init_with_exp(Condition *condition, CompOp comp, Exp *left_expr, 
     condition->right_is_attr = 1;
   } else {
     condition->right_expr = right_expr;
+    condition->right_is_attr = -1;
   }
 }
 
@@ -276,21 +293,17 @@ Exp *create_expression(Exp *left_expr, Exp *right_expr, Value *value, RelAttr *r
   } else {
     exp->left_expr = nullptr;
   }
+  exp->lbrace = 0;
+  exp->rbrace = 0; 
   return exp;
 }
 
 void expression_destroy(Exp *exp)
 {
-
+  if (exp->expr_type == NO_EXP) {
+    return;
+  }
   exp->expr_type = NO_EXP;
-  if (exp->value != nullptr) {
-    value_destroy(exp->value);
-    exp->value = nullptr;
-  }
-  if (exp->attr != nullptr) {
-    relation_attr_destroy(exp->attr);
-    exp->attr = nullptr;
-  }
   if (exp->left_expr != nullptr) {
     expression_destroy(exp->left_expr);
   }
@@ -308,7 +321,9 @@ void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t
 }
 void attr_info_destroy(AttrInfo *attr_info)
 {
-  free(attr_info->name);
+  if (attr_info->name != nullptr) {
+    free(attr_info->name);
+  }
   attr_info->name = nullptr;
 }
 
@@ -382,6 +397,10 @@ void selects_destroy(Selects *selects)
 
   for (size_t i = 0; i < selects->condition_num; i++) {
     condition_destroy(&selects->conditions[i]);
+  }
+
+  for (size_t i=0; i<selects->expr_num; i++) {
+    expression_destroy(selects->exp[i]);
   }
   selects->condition_num = 0;
 }

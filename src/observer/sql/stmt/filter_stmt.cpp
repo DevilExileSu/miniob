@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 // Created by Wangyunlai on 2022/5/22.
 //
 #include <cmath>
+#include <stack>
 
 #include "rc.h"
 #include "common/log/log.h"
@@ -66,7 +67,7 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
 RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
 		       const RelAttr &attr, Table *&table, const FieldMeta *&field, CompOp comp)
 {
-  // TODO(vanish): alias 这里attr.relation_name可能是表的别名
+  // alias 这里attr.relation_name可能是表的别名
   // tables包含表别名对应的表，并且是距离当前查询层最近的表
   // 如果考虑内外层的关联查询这里需要修改逻辑
   if (common::is_blank(attr.relation_name)) {
@@ -83,8 +84,7 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
     LOG_WARN("No such table: attr.relation_name: %s", attr.relation_name);
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
-  // TODO(vanish): alias 这里attr.attribute_name可能是列别名
-  // 需要传入一个列别名和列对应的map
+  //  alias 这里attr.attribute_name可能是列别名，实际题目不考察，就不用处理
   if (common::is_blank(attr.attribute_name) && (comp == CompOp::EXISTS_OP || comp == CompOp::NOT_EXISTS_OP)) {
     field = table->table_meta().field(0);
   } else {
@@ -97,6 +97,126 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
   }
 
   return RC::SUCCESS;
+}
+
+
+ RC FilterStmt::expresion_tree_generate(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+                          TreeExpr *&root_expr, Exp *exp, Table *&table, bool &is_multi_table, bool &is_agg,
+                          std::vector<RelAttr> *rel_attrs, std::vector<Field> *query_fields) {
+
+
+  bool has_agg = false;
+  bool has_field = false;
+  // 实际上，表达式树中 如果 不包含ATTR类型的Exp，可以先计算出来，不用在后面每次进行运算调用
+  // 只复制节点类型，这里就是只复制节点类型，标记符号
+  TreeExpr *root = new TreeExpr(exp);
+  RC rc = RC::SUCCESS;
+  std::stack<std::pair<Exp *, Expression *>> exp_stack;
+  exp_stack.push(std::make_pair(exp, root));
+
+  while (!exp_stack.empty()) {
+    auto cur = exp_stack.top();
+    exp_stack.pop();
+    // 表明该节点是一个运算符
+    TreeExpr *cur_parent = static_cast<TreeExpr *>(cur.second);
+    Exp *left_exp = cur.first->left_expr;
+    Exp *right_exp = cur.first->right_expr;
+    if (left_exp != nullptr) {
+      // 是个符号
+      if (left_exp->expr_type != NodeType::ATTR && left_exp->expr_type != NodeType::VAL) {
+        TreeExpr *left_path = new TreeExpr(left_exp);
+        cur_parent->set_left(left_path);
+        // 并压入栈中
+        exp_stack.push(std::make_pair(left_exp, left_path));
+      } else if (left_exp->expr_type == NodeType::VAL){
+        // 如果是数值节点
+        ValueExpr *left_leaf = new ValueExpr(*left_exp->value);
+        cur_parent->set_left(left_leaf);
+      } else if (left_exp->expr_type == NodeType::ATTR) {
+        // 如果是字段节点
+        // 判断是否是聚合函数
+        RelAttr *attr = left_exp->attr;
+        if (attr->agg_func != AggFunc::NONE) {
+          has_agg = true;
+          if (0 == strcmp(attr->attribute_name, "*") && attr->agg_func != AggFunc::COUNT) {
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+          if (rel_attrs != nullptr) {
+            rel_attrs->emplace_back(*attr);
+          }
+        } else {
+          has_field = true;
+        }
+        if (has_agg && has_field) {
+          return RC::INVALID_ARGUMENT;
+        }
+
+        Table *left_table = nullptr;
+        const FieldMeta *field = nullptr;
+        rc = get_table_and_field(db, default_table, tables, *attr, left_table, field, CompOp::NO_OP);
+        if (query_fields != nullptr) {
+          query_fields->emplace_back(Field(left_table, field));
+        }
+        if (rc != RC::SUCCESS) {
+          return rc;
+        }
+        if (table != nullptr && table != left_table) {
+          is_multi_table = true;
+        } else {
+          table = left_table;
+        }
+        FieldExpr *left_leaf = new FieldExpr(left_table, field, attr->agg_func);
+        cur_parent->set_left(left_leaf);
+      }
+    }
+
+    if (right_exp != nullptr) {
+      if (right_exp->expr_type != NodeType::ATTR && right_exp->expr_type != NodeType::VAL) {
+        TreeExpr *right_path = new TreeExpr(right_exp);
+        cur_parent->set_right(right_path);
+        exp_stack.push(std::make_pair(right_exp, right_path));
+      } else if (right_exp->expr_type == NodeType::VAL) {
+        ValueExpr *right_leaf = new ValueExpr(*right_exp->value);
+        cur_parent->set_right(right_leaf);
+      } else if (right_exp->expr_type == NodeType::ATTR) {
+        Table *right_table = nullptr;
+        RelAttr *attr = right_exp->attr;
+        if (attr->agg_func != AggFunc::NONE) {
+          has_agg = true;
+          // 2.1 *只能出现在COUNT中
+          if (0 == strcmp(attr->attribute_name, "*") && attr->agg_func != AggFunc::COUNT) {
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+          if (rel_attrs != nullptr) {
+            rel_attrs->emplace_back(*attr);
+          }
+        } else {
+          has_field = true;
+        }
+        if (has_agg && has_field) {
+          return RC::INVALID_ARGUMENT;
+        }
+        const FieldMeta *field = nullptr;
+        rc = get_table_and_field(db, default_table, tables, *attr, right_table, field, CompOp::NO_OP);
+        if (query_fields != nullptr) {
+          query_fields->emplace_back(Field(right_table, field));
+        }
+        if (rc != RC::SUCCESS) {
+          return rc;
+        }
+        if (table != nullptr && table != right_table) {
+          is_multi_table = true;
+        } else {
+          table = right_table;
+        }
+        FieldExpr *right_leaf = new FieldExpr(right_table, field, attr->agg_func);
+        cur_parent->set_right(right_leaf);
+      }
+    }
+  }
+  is_agg = has_agg;
+  root_expr = root;
+  return rc;
 }
 
 RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
@@ -118,7 +238,10 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   FieldMeta *condition_field = nullptr;
   Table *left_table = nullptr;
   Table *right_table = nullptr;
-  if (condition.left_is_attr != 0) {
+  bool is_multi_table = false;
+
+
+  if (condition.left_is_attr == 1 || comp == CompOp::EXISTS_OP || comp == CompOp::NOT_EXISTS_OP) {
     const FieldMeta *field = nullptr;
     rc = get_table_and_field(db, default_table, tables, condition.left_attr, left_table, field, comp);  
     if (rc != RC::SUCCESS) {
@@ -127,13 +250,21 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     }
     left = new FieldExpr(left_table, field);
     condition_field = const_cast<FieldMeta *>(field);
-  } else {
+  } else if (condition.left_is_attr == 0){
     left_condition_value = const_cast<Value *>(&condition.left_value);
     condition_value = const_cast<Value *>(&condition.left_value);
     left = new ValueExpr(condition.left_value);
+  } else {
+    TreeExpr *root_expr = nullptr;
+    bool is_agg = false;
+    rc = expresion_tree_generate(db, default_table, tables, root_expr, condition.left_expr, left_table, is_multi_table, is_agg);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    left = root_expr;
   }
 
-  if (condition.right_is_attr) {
+  if (condition.right_is_attr == 1) {
     const FieldMeta *field = nullptr;
     rc = get_table_and_field(db, default_table, tables, condition.right_attr, right_table, field, comp);  
     if (rc != RC::SUCCESS) {
@@ -143,10 +274,19 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     }
     right = new FieldExpr(right_table, field);
     condition_field = const_cast<FieldMeta *>(field);
-  } else {
+  } else if (condition.right_is_attr == 0) {
     right_condition_value = const_cast<Value *>(&condition.right_value);
     condition_value = const_cast<Value *>(&condition.right_value);
     right = new ValueExpr(condition.right_value);
+  } else {
+    TreeExpr *root_expr = nullptr;
+    bool is_agg = false;
+    rc = expresion_tree_generate(db, default_table, tables, root_expr, condition.right_expr, right_table, is_multi_table, is_agg);
+    if (rc != RC::SUCCESS) {
+      delete left;
+      return rc;
+    }
+    right = root_expr;
   }
 
   filter_unit = new FilterUnit;
@@ -190,23 +330,27 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     }
   };
 
+  // 判断是否为多表过滤条件
   if (left_table != nullptr && right_table != nullptr) {
-    if (left_table == right_table) {
+    // 左右使用两个表相同，并且is_multi_table = false
+    if (left_table == right_table && !is_multi_table) {
       std::string table_name = std::string(left_table->name());
       add_filter_unit(table_name);
     } else {
       tmp_stmt->filter_units_.emplace_back(filter_unit);
     }
-  } else if (left_table != nullptr) {
+  } else if (left_table != nullptr && !is_multi_table) {
     std::string table_name = std::string(left_table->name());
     add_filter_unit(table_name);
-  } else if (right_table != nullptr) {
+  } else if (right_table != nullptr && !is_multi_table) {
     std::string table_name = std::string(right_table->name());
     add_filter_unit(table_name);
-  } else {
+  } else if (!is_multi_table){
     std::string table_name = std::string(default_table->name());
     add_filter_unit(table_name);
-  } 
+  } else if (is_multi_table) {
+    tmp_stmt->filter_units_.emplace_back(filter_unit);
+  }
 
   return rc;
 }

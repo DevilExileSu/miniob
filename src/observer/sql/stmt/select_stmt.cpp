@@ -85,7 +85,7 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
   bool is_agg = false;
 
 
-  for (int i = select_sql.attr_num - 1; i >= 0; i--) {
+  for (int i = 0; i < select_sql.attr_num; i++) {
     // RelAttr包含聚合函数的处理
     const RelAttr &relation_attr = select_sql.attributes[i];
     // 1. 先判断是否为字段和聚合函数混合
@@ -261,7 +261,7 @@ RC SelectStmt::create_sub_select(Db *db, std::unordered_map<std::string, Table *
     return rc;
   }
 
-  std::reverse(rel_attrs.begin(), rel_attrs.end());
+  // std::reverse(rel_attrs.begin(), rel_attrs.end());
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->tables_.swap(tables);
@@ -316,105 +316,151 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   }
   // 反转tables
   std::reverse(tables.begin(), tables.end());
+  std::vector<std::pair<bool, int>> fields_or_expr;
+  std::vector<TreeExpr *> query_expr;
 
   // collect query fields in `select` statement
   std::vector<Field> query_fields;
   std::vector<RelAttr> rel_attrs;
   bool is_field = false;
   bool is_agg = false;
-  for (int i = select_sql.attr_num - 1; i >= 0; i--) {
-    // RelAttr包含聚合函数的处理
-    const RelAttr &relation_attr = select_sql.attributes[i];
+  
+  Table *default_table = nullptr;
+  if (!tables.empty()) {
+    default_table = tables[0];
+  }
 
-    // 1. 先判断是否为字段和聚合函数混合
-    if (relation_attr.agg_func != AggFunc::NONE) {
-      is_agg = true;
-    } else {
-      is_field = true;
-    }
+  // expression: 
+  for (int i = select_sql.expr_num - 1; i >= 0 ; i--) {
+    // 如果当前的表达式类型为Attr
+    if (select_sql.exp[i]->expr_type == NodeType::ATTR) {
+      // RelAttr包含聚合函数的处理
+      const RelAttr &relation_attr = *select_sql.exp[i]->attr;
 
-    if (is_agg && is_field) {
-      return RC::SCHEMA_FIELD_MISSING;
-    }
-
-    // 2. 检查字段是否有效
-    if (common::is_blank(relation_attr.relation_name) && 0 == strcmp(relation_attr.attribute_name, "*")) {
-      for (Table *table : tables) {
-        wildcard_fields(table, query_fields, is_agg, table_alias);
-      }
-    } else if (!common::is_blank(relation_attr.relation_name)) {  // TODO
-      const char *table_name = relation_attr.relation_name;
-      const char *field_name = relation_attr.attribute_name;
-      // field_name == nullptr 只可能使RelAttr中聚合参数为整型数字
-      // 这里就随便选择一个字段进行统计s
-      // TODO(vanish): alias: 如果含有列别名需要进行额外的处理，给Field添加alias字段？ 
-      if (field_name == nullptr) {
-        wildcard_fields(tables[0], query_fields, is_agg, table_alias);
-        continue;
-      }
-      if (0 == strcmp(table_name, "*")) {
-        if (0 != strcmp(field_name, "*")) {
-          LOG_WARN("invalid field name while table is *. attr=%s", field_name);
-          return RC::SCHEMA_FIELD_MISSING;
-        }
-        for (Table *table : tables) {
-          wildcard_fields(table, query_fields, is_agg, table_alias);
-        }
+      // 1. 先判断是否为字段和聚合函数混合
+      if (relation_attr.agg_func != AggFunc::NONE) {
+        is_agg = true;
       } else {
-        auto iter = table_map.find(table_name);
-        if (iter == table_map.end()) {
-          LOG_WARN("no such table in from list: %s", table_name);
-          return RC::SCHEMA_FIELD_MISSING;
-        }
+        is_field = true;
+      }
 
-        Table *table = iter->second;
-        if (0 == strcmp(field_name, "*")) {
+      if (is_agg && is_field) {
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+
+      // 2. 检查字段是否有效
+      if (common::is_blank(relation_attr.relation_name) && 0 == strcmp(relation_attr.attribute_name, "*")) {
+        for (Table *table : tables) {
+          int cur = query_fields.size();
           wildcard_fields(table, query_fields, is_agg, table_alias);
+          for (int i=cur; i<query_fields.size(); i++) {
+            fields_or_expr.emplace_back(std::make_pair(true, i));
+          }
+          if (is_agg) {
+            break;
+          }
+        }
+      } else if (!common::is_blank(relation_attr.relation_name)) {  // TODO
+        const char *table_name = relation_attr.relation_name;
+        const char *field_name = relation_attr.attribute_name;
+        // field_name == nullptr 只可能使RelAttr中聚合参数为整型数字
+        // 这里就随便选择一个字段进行统计s
+        // TODO(vanish): alias: 如果含有列别名需要进行额外的处理，给Field添加alias字段？ 
+        if (field_name == nullptr) {
+          int cur = query_fields.size();
+          wildcard_fields(tables[0], query_fields, is_agg, table_alias);
+          for (int i=cur; i<query_fields.size(); i++) {
+            fields_or_expr.emplace_back(std::make_pair(true, i));
+          }
+          continue;
+        }
+        if (0 == strcmp(table_name, "*")) {
+          if (0 != strcmp(field_name, "*")) {
+            LOG_WARN("invalid field name while table is *. attr=%s", field_name);
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+          for (Table *table : tables) {
+            int cur = query_fields.size();
+            wildcard_fields(table, query_fields, is_agg, table_alias);
+            for (int i=cur; i<query_fields.size(); i++) {
+              fields_or_expr.emplace_back(std::make_pair(true, i));
+            }
+            if (is_agg) {
+              break;
+            }
+          }
         } else {
-          const FieldMeta *field_meta = table->table_meta().field(field_name);
-          if (nullptr == field_meta) {
-            LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+          auto iter = table_map.find(table_name);
+          if (iter == table_map.end()) {
+            LOG_WARN("no such table in from list: %s", table_name);
             return RC::SCHEMA_FIELD_MISSING;
           }
 
-          Field field(table, field_meta);
-          field.set_alias(relation_attr.alias, table_alias[table->name()].c_str());
-          query_fields.push_back(field);
+          Table *table = iter->second;
+          if (0 == strcmp(field_name, "*")) {
+            int cur = query_fields.size();
+            wildcard_fields(table, query_fields, is_agg, table_alias);
+            for (int i=cur; i<query_fields.size(); i++) {
+              fields_or_expr.emplace_back(std::make_pair(true, i));
+            }
+          } else {
+            const FieldMeta *field_meta = table->table_meta().field(field_name);
+            if (nullptr == field_meta) {
+              LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+              return RC::SCHEMA_FIELD_MISSING;
+            }
+  
+                  
+            Field field(table, field_meta);
+            field.set_alias(relation_attr.alias, table_alias[table->name()].c_str());
+            fields_or_expr.emplace_back(std::make_pair(true, query_fields.size()));
+            query_fields.push_back(field);
+          }
         }
+      } else {
+        if (tables.size() != 1) {
+          LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name);
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+
+        Table *table = tables[0];
+        const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name);
+        if (nullptr == field_meta) {
+          LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name);
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+
+        Field field(table, field_meta);
+        field.set_alias(relation_attr.alias, table_alias[table->name()].c_str());
+        fields_or_expr.emplace_back(std::make_pair(true, query_fields.size()));
+        query_fields.push_back(field);
       }
+      // 2. 对聚合函数的处理
+      if (is_agg) {
+        // 2.1 *只能出现在COUNT中
+        if (0 == strcmp(relation_attr.attribute_name, "*") && relation_attr.agg_func != AggFunc::COUNT) {
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        rel_attrs.emplace_back(relation_attr);
+      }
+    } else if (select_sql.exp[i]->expr_type != NodeType::VAL) {
+      TreeExpr *expr = nullptr; 
+      Table *table = nullptr;
+      bool is_multi_table = false;
+      // 生成TreeExpr
+      FilterStmt::expresion_tree_generate(db, default_table, &table_map, expr, select_sql.exp[i], table, is_multi_table, is_agg, &rel_attrs, &query_fields);
+      if (is_agg && is_field) {
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      fields_or_expr.emplace_back(std::make_pair(false, query_expr.size()));
+      query_expr.emplace_back(expr);
     } else {
-      if (tables.size() != 1) {
-        LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name);
-        return RC::SCHEMA_FIELD_MISSING;
-      }
-
-      Table *table = tables[0];
-      const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name);
-      if (nullptr == field_meta) {
-        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name);
-        return RC::SCHEMA_FIELD_MISSING;
-      }
-
-      Field field(table, field_meta);
-      field.set_alias(relation_attr.alias, table_alias[table->name()].c_str());
-      query_fields.push_back(field);
-    }
-    // 2. 对聚合函数的处理
-    if (is_agg) {
-      // 2.1 *只能出现在COUNT中
-      if (0 == strcmp(relation_attr.attribute_name, "*") && relation_attr.agg_func != AggFunc::COUNT) {
-        return RC::SCHEMA_FIELD_MISSING;
-      }
-      rel_attrs.emplace_back(relation_attr);
+      return RC::INVALID_ARGUMENT;
     }
   }
 
   LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), query_fields.size());
 
-  Table *default_table = nullptr;
-  if (!tables.empty()) {
-    default_table = tables[0];
-  }
   std::vector<SubSelectStmt> sub_select_stmt;
   std::unordered_map<std::string, std::string> sub_alias2table;
   for (size_t i = 0; i < select_sql.condition_num; i++) {
@@ -467,13 +513,15 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     return rc;
   }
 
-  std::reverse(rel_attrs.begin(), rel_attrs.end());
+  // std::reverse(rel_attrs.begin(), rel_attrs.end());
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->rel_attrs_.swap(rel_attrs);
   select_stmt->sub_select_stmts_.swap(sub_select_stmt);
+  select_stmt->query_expr_.swap(query_expr);
+  select_stmt->fields_or_expr_.swap(fields_or_expr);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->is_and_ = select_sql.is_and;
   stmt = select_stmt;

@@ -55,6 +55,265 @@ public:
     return attr_type_;
   }
 
+  TupleCell operator+(const TupleCell &cell) const {
+    TupleCell res_cell;
+    res_cell.attr_type_ = NULL_;
+    if (this->attr_type_ == NULL_ || cell.attr_type_ == NULL_) {
+      return res_cell;
+    }
+    if (this->attr_type_ == cell.attr_type_) {
+      switch (this->attr_type_) {
+      case INTS:  {
+        int *res = (int *)malloc(sizeof(int));
+        *res = *(int *)this->data_ + *(int *)cell.data_;
+        res_cell.attr_type_ = INTS;
+        res_cell.set_data((char *)res);
+      } break;
+      case FLOATS: {
+        float *res = (float *)malloc(sizeof(float));
+        *res = *(float *)this->data_ + *(float *)cell.data_;
+        res_cell.attr_type_ = FLOATS;
+        res_cell.set_data((char *)res);
+      } break;
+      case CHARS: {
+        float *res = (float *)malloc(sizeof(float));
+        *res = atof(this->data_) + atof(cell.data_);
+        res_cell.attr_type_ = FLOATS;
+        res_cell.set_data((char *)res);
+      } break;
+      default: 
+        break;
+      }
+    } else if(attr_type_ == INTS && cell.attr_type_ == FLOATS) {
+      float *res = (float *)malloc(sizeof(float));
+      int this_data = *(int *)this->data_;
+      float other_data = *(float *)cell.data_;
+      *res = this_data + other_data;
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    } else if (attr_type_ == FLOATS && cell.attr_type_ == INTS) {
+      float *res = (float *)malloc(sizeof(float));
+      float this_data = *(float *)this->data_;
+      int other_data = *(int *)cell.data_;
+      *res = this_data + other_data;
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    } else if ((attr_type_ == INTS || attr_type_ == FLOATS) && cell.attr_type_ == CHARS) {
+      float *res = (float *)malloc(sizeof(float));
+      *res = *(float *)this->data_ + atof(cell.data_);
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    } else if (attr_type_ == CHARS && (cell.attr_type_ == INTS || cell.attr_type_ == FLOATS)) {
+       float *res = (float *)malloc(sizeof(float));
+      *res = atof(this->data_) + *(float *)cell.data_;
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    }
+    return res_cell;
+  }
+
+  TupleCell operator-(const TupleCell &cell) const {
+    TupleCell res_cell;
+    res_cell.attr_type_ = NULL_;
+
+    if (this->attr_type_ == NULL_ || cell.attr_type_ == NULL_) {
+      return res_cell;
+    }
+    if (this->attr_type_ == cell.attr_type_) {
+      switch (this->attr_type_) {
+      case INTS:  {
+        int *res = (int *)malloc(sizeof(int));
+        *res = *(int *)this->data_ - *(int *)cell.data_;
+        res_cell.attr_type_ = INTS;
+        res_cell.set_data((char *)res);
+      } break;
+      case FLOATS: {
+        float *res = (float *)malloc(sizeof(float));
+        *res = *(float *)this->data_ - *(float *)cell.data_;
+        res_cell.attr_type_ = FLOATS;
+        res_cell.set_data((char *)res);
+      } break;
+      case CHARS: {
+        float *res = (float *)malloc(sizeof(float));
+        *res = atof(this->data_) - atof(cell.data_);
+        res_cell.attr_type_ = FLOATS;
+        res_cell.set_data((char *)res);
+      } break; 
+      default:
+        break;
+      }
+    } else if(attr_type_ == INTS && cell.attr_type_ == FLOATS) {
+      float *res = (float *)malloc(sizeof(float));
+      int this_data = *(int *)this->data_;
+      float other_data = *(float *)cell.data_;
+      *res = this_data - other_data;
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    } else if (attr_type_ == FLOATS && cell.attr_type_ == INTS) {
+      float *res = (float *)malloc(sizeof(float));
+      float this_data = *(float *)this->data_;
+      int other_data = *(int *)cell.data_;
+      *res = this_data - other_data;
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    } else if ((attr_type_ == INTS || attr_type_ == FLOATS) && cell.attr_type_ == CHARS) {
+      float *res = (float *)malloc(sizeof(float));
+      *res = *(float *)this->data_ - atof(cell.data_);
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    } else if (attr_type_ == CHARS && (attr_type_ == INTS || attr_type_ == FLOATS)) {
+       float *res = (float *)malloc(sizeof(float));
+      *res = atof(this->data_) - *(float *)cell.data_;
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    }
+    return res_cell;
+  }
+
+  TupleCell operator/(const TupleCell &cell) const {
+    TupleCell res_cell;
+    res_cell.attr_type_ = NULL_;
+    if (this->attr_type_ == NULL_ || cell.attr_type_ == NULL_) {
+      return res_cell;
+    }
+    const double epsilon = 1E-6;
+
+    if (this->attr_type_ == cell.attr_type_) {
+      switch (this->attr_type_) {
+      case INTS:  {
+        float *res = (float *)malloc(sizeof(int));
+        int this_data = *(int *)this->data_;
+        int other_data = *(int *)cell.data_;
+        if (other_data != 0) {
+          *res = this_data / (other_data + .0);
+          res_cell.attr_type_ = FLOATS;
+          res_cell.set_data((char *)res);
+        }
+      } break;
+      case FLOATS: {
+        float *res = (float *)malloc(sizeof(float));
+        float this_data = *(float *)this->data_;
+        float other_data = *(float *)cell.data_;
+        if (other_data > epsilon) {
+          *res = this_data / other_data;
+          res_cell.attr_type_ = FLOATS;
+          res_cell.set_data((char *)res);
+        } 
+      } break;
+      case CHARS: {
+        float *res = (float *)malloc(sizeof(float));
+        float this_data = atof(this->data_);
+        float other_data = atof(cell.data_);
+        if (other_data > epsilon) {
+          *res = this_data / other_data;
+          res_cell.attr_type_ = FLOATS;
+          res_cell.set_data((char *)res);
+        }
+      } break;
+      default:
+        break;
+      }
+    } else if(attr_type_ == INTS && cell.attr_type_ == FLOATS) {
+      float *res = (float *)malloc(sizeof(float));
+      int this_data = *(int *)this->data_;
+      float other_data = *(float *)cell.data_;
+      if (other_data > epsilon) {
+        *res = this_data / other_data;
+        res_cell.attr_type_ = FLOATS;
+        res_cell.set_data((char *)res);
+      }
+    } else if (attr_type_ == FLOATS && cell.attr_type_ == INTS) {
+      float *res = (float *)malloc(sizeof(float));
+      float this_data = *(float *)this->data_;
+      int other_data = *(int *)cell.data_;
+      if (other_data != 0) {
+        *res = this_data / other_data;
+        res_cell.attr_type_ = FLOATS;
+        res_cell.set_data((char *)res);
+      }
+    } else if ((attr_type_ == INTS || attr_type_ == FLOATS) && cell.attr_type_ == CHARS) {
+      float *res = (float *)malloc(sizeof(float));
+      float this_data = *(float *)this->data_;
+      float other_data = atof(cell.data_);
+      if (other_data > epsilon) {
+        *res = this_data / other_data;
+        res_cell.attr_type_ = FLOATS;
+        res_cell.set_data((char *)res);
+      }
+    } else if (attr_type_ == CHARS && (cell.attr_type_ == INTS || cell.attr_type_ == FLOATS)) {
+      float *res = (float *)malloc(sizeof(float));
+      float this_data = atof(this->data_);
+      float other_data = *(float *)cell.data_;
+      if (other_data > epsilon) {
+        *res = this_data / other_data;
+        res_cell.attr_type_ = FLOATS;
+        res_cell.set_data((char *)res);
+      }
+    }
+    return res_cell;
+  }
+
+  TupleCell operator*(const TupleCell &cell) const {
+    TupleCell res_cell;
+    res_cell.attr_type_ = NULL_;
+    if (this->attr_type_ == NULL_ || cell.attr_type_ == NULL_) {
+      return res_cell;
+    }
+    if (this->attr_type_ == cell.attr_type_) {
+      switch (this->attr_type_) {
+      case INTS:  {
+        int *res = (int *)malloc(sizeof(int));
+        *res = *(int *)this->data_ * *(int *)cell.data_;
+        res_cell.attr_type_ = INTS;
+        res_cell.set_data((char *)res);
+      } break;
+      case FLOATS: {
+        float *res = (float *)malloc(sizeof(float));
+        *res = *(float *)this->data_ * *(float *)cell.data_;
+        res_cell.attr_type_ = FLOATS;
+        res_cell.set_data((char *)res);
+      } break;
+      case CHARS: {
+        float *res = (float *)malloc(sizeof(float));
+        *res = atof(this->data_) * atof(cell.data_);
+        res_cell.attr_type_ = FLOATS;
+        res_cell.set_data((char *)res);
+      } break; 
+      default: 
+        break;
+      }
+    } else if(attr_type_ == INTS && cell.attr_type_ == FLOATS) {
+      float *res = (float *)malloc(sizeof(float));
+      int this_data = *(int *)this->data_;
+      float other_data = *(float *)cell.data_;
+      *res = this_data * other_data;
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    } else if (attr_type_ == FLOATS && cell.attr_type_ == INTS) {
+      float *res = (float *)malloc(sizeof(float));
+      float this_data = *(float *)this->data_;
+      int other_data = *(int *)cell.data_;
+      *res = this_data * other_data;
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    } else if ((attr_type_ == INTS || attr_type_ == FLOATS) && cell.attr_type_ == CHARS) {
+      float *res = (float *)malloc(sizeof(float));
+      float this_data = *(float *)this->data_;
+      float other_data = atof(cell.data_);
+      *res =  this_data * other_data;
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    } else if (attr_type_ == CHARS && (cell.attr_type_ == INTS || cell.attr_type_ == FLOATS)) {
+      float *res = (float *)malloc(sizeof(float));
+      float this_data = atof(this->data_);
+      float other_data = *(float *)cell.data_;
+      *res =  this_data * other_data;
+      res_cell.attr_type_ = FLOATS;
+      res_cell.set_data((char *)res);
+    } 
+    return res_cell;
+  }
+
 private:
   AttrType attr_type_ = UNDEFINED;
   int length_ = -1;

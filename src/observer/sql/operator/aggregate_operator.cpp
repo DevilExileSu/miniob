@@ -32,7 +32,7 @@ RC AggregateOperator::open()
             continue;
         }
         TupleCell cell;
-        tuple->find_cell(query_fields_[rel_attrs_.size() - i - 1], cell);
+        tuple->find_cell(query_fields_[i], cell);
         stat_[i].add_tuple(cell);
     }
   }
@@ -48,6 +48,40 @@ RC AggregateOperator::close()
 {
     children_[0]->close();
     return RC::SUCCESS;
+}
+
+void AggregateOperator::print_header_at(std::ostream &os, int i) {
+    switch (rel_attrs_[i].agg_func) {
+        case MAX: {
+            os << "max(";
+            break;
+        }
+        case MIN: {
+            os << "min(";
+            break;
+        }
+        case AVG: {
+            os << "avg(";
+            break;
+        }
+        case COUNT: {
+            os << "count(" ;
+            break;
+        }
+        case SUM: {
+            os<< "sum(";
+            break; 
+        }
+        default: {
+            os << "error()";
+            break;             
+        }
+    }
+    if (rel_attrs_[i].attribute_name == nullptr) {
+        os << rel_attrs_[i].num << ")";
+    } else {
+        os << rel_attrs_[i].attribute_name << ")";
+    }
 }
 
 void AggregateOperator::print_header(std::ostream &os) {
@@ -92,6 +126,47 @@ void AggregateOperator::print_header(std::ostream &os) {
         }
     }
     os << '\n';
+}
+
+void AggregateOperator::to_string_at(std::ostream &os, int i) {
+        if (rel_attrs_[i].attribute_name == nullptr) {
+            os << rel_attrs_[i].num;
+            return;
+        }
+        if (stat_[i].is_null() && rel_attrs_[i].agg_func != AggFunc::COUNT) {
+            os << "NULL";
+            return;
+        }
+        switch (rel_attrs_[i].agg_func) {
+            case MAX: {
+                os << stat_[i].max();
+                break;
+            }
+            case MIN: {
+                os << stat_[i].min();
+                break;
+            }
+            case AVG: {
+                os << double2string(stat_[i].avg());
+                break;
+            }
+            case COUNT: {
+                if (0 == strcmp(rel_attrs_[i].attribute_name, "*")) {
+                    os << stat_[i].count();
+                } else {
+                    os << stat_[i].not_null_count();
+                }
+                break;
+            }
+            case SUM: {
+                os << double2string(stat_[i].sum());
+                break; 
+            }
+            default: {
+                os << "x";
+                break;             
+            }
+        }
 }
 
 void AggregateOperator::to_string(std::ostream &os) {

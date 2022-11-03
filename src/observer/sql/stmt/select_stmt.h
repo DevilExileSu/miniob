@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "rc.h"
 #include "sql/stmt/stmt.h"
 #include "storage/common/field.h"
+#include "sql/expr/expression.h"
 
 class FieldMeta;
 class FilterStmt;
@@ -56,11 +57,18 @@ public:
   bool is_single_field(){ return query_fields_.size() == 1; }
   bool is_and() { return is_and_; }
 
+  std::vector<std::pair<bool, int>> &fields_or_expr()  { return fields_or_expr_; }
+  std::vector<TreeExpr *> &query_expr() { return query_expr_; }
+  
+
 private:
   std::vector<Field> query_fields_;
   std::vector<Table *> tables_;
   std::vector<RelAttr> rel_attrs_;
   FilterStmt *filter_stmt_ = nullptr;
   std::vector<SubSelectStmt> sub_select_stmts_;
+  // true表示存在query_fields_中，false表示存在query_expr_
+  std::vector<std::pair<bool, int>> fields_or_expr_;
+  std::vector<TreeExpr *> query_expr_;
   bool is_and_ = true;
 };

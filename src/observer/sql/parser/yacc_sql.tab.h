@@ -74,49 +74,49 @@ extern int yydebug;
     TRX_BEGIN = 275,               /* TRX_BEGIN  */
     TRX_COMMIT = 276,              /* TRX_COMMIT  */
     TRX_ROLLBACK = 277,            /* TRX_ROLLBACK  */
-    INT_T = 278,                   /* INT_T  */
-    STRING_T = 279,                /* STRING_T  */
-    FLOAT_T = 280,                 /* FLOAT_T  */
-    DATE_T = 281,                  /* DATE_T  */
-    TEXT_T = 282,                  /* TEXT_T  */
-    NULL_T = 283,                  /* NULL_T  */
-    NULLABLE = 284,                /* NULLABLE  */
-    HELP = 285,                    /* HELP  */
-    EXIT = 286,                    /* EXIT  */
-    DOT = 287,                     /* DOT  */
-    INTO = 288,                    /* INTO  */
-    VALUES = 289,                  /* VALUES  */
-    FROM = 290,                    /* FROM  */
-    WHERE = 291,                   /* WHERE  */
-    AND = 292,                     /* AND  */
-    OR = 293,                      /* OR  */
-    SET = 294,                     /* SET  */
-    AS = 295,                      /* AS  */
-    ON = 296,                      /* ON  */
-    IN = 297,                      /* IN  */
-    IS = 298,                      /* IS  */
-    NOT = 299,                     /* NOT  */
-    EXIST = 300,                   /* EXIST  */
-    INNER = 301,                   /* INNER  */
-    JOIN = 302,                    /* JOIN  */
-    LOAD = 303,                    /* LOAD  */
-    DATA = 304,                    /* DATA  */
-    INFILE = 305,                  /* INFILE  */
-    MAX_T = 306,                   /* MAX_T  */
-    MIN_T = 307,                   /* MIN_T  */
-    COUNT_T = 308,                 /* COUNT_T  */
-    AVG_T = 309,                   /* AVG_T  */
-    SUM_T = 310,                   /* SUM_T  */
-    LIKE = 311,                    /* LIKE  */
-    EQ = 312,                      /* EQ  */
-    LT = 313,                      /* LT  */
-    GT = 314,                      /* GT  */
-    LE = 315,                      /* LE  */
-    GE = 316,                      /* GE  */
-    NE = 317,                      /* NE  */
-    ADD_T = 318,                   /* ADD_T  */
-    SUB_T = 319,                   /* SUB_T  */
-    DIV_T = 320,                   /* DIV_T  */
+    ADD_T = 278,                   /* ADD_T  */
+    SUB_T = 279,                   /* SUB_T  */
+    DIV_T = 280,                   /* DIV_T  */
+    INT_T = 281,                   /* INT_T  */
+    STRING_T = 282,                /* STRING_T  */
+    FLOAT_T = 283,                 /* FLOAT_T  */
+    DATE_T = 284,                  /* DATE_T  */
+    TEXT_T = 285,                  /* TEXT_T  */
+    NULL_T = 286,                  /* NULL_T  */
+    NULLABLE = 287,                /* NULLABLE  */
+    HELP = 288,                    /* HELP  */
+    EXIT = 289,                    /* EXIT  */
+    DOT = 290,                     /* DOT  */
+    INTO = 291,                    /* INTO  */
+    VALUES = 292,                  /* VALUES  */
+    FROM = 293,                    /* FROM  */
+    WHERE = 294,                   /* WHERE  */
+    AND = 295,                     /* AND  */
+    OR = 296,                      /* OR  */
+    SET = 297,                     /* SET  */
+    AS = 298,                      /* AS  */
+    ON = 299,                      /* ON  */
+    IN = 300,                      /* IN  */
+    IS = 301,                      /* IS  */
+    NOT = 302,                     /* NOT  */
+    EXIST = 303,                   /* EXIST  */
+    INNER = 304,                   /* INNER  */
+    JOIN = 305,                    /* JOIN  */
+    LOAD = 306,                    /* LOAD  */
+    DATA = 307,                    /* DATA  */
+    INFILE = 308,                  /* INFILE  */
+    MAX_T = 309,                   /* MAX_T  */
+    MIN_T = 310,                   /* MIN_T  */
+    COUNT_T = 311,                 /* COUNT_T  */
+    AVG_T = 312,                   /* AVG_T  */
+    SUM_T = 313,                   /* SUM_T  */
+    LIKE = 314,                    /* LIKE  */
+    EQ = 315,                      /* EQ  */
+    LT = 316,                      /* LT  */
+    GT = 317,                      /* GT  */
+    LE = 318,                      /* LE  */
+    GE = 319,                      /* GE  */
+    NE = 320,                      /* NE  */
     NUMBER = 321,                  /* NUMBER  */
     FLOAT = 322,                   /* FLOAT  */
     DATE = 323,                    /* DATE  */
@@ -134,7 +134,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 152 "yacc_sql.y"
+#line 153 "yacc_sql.y"
 
   struct _Attr *attr1;
   struct _Condition *condition1;

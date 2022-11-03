@@ -243,43 +243,55 @@ void end_trx_if_need(Session *session, Trx *trx, bool all_right)
   }
 }
 
-void print_tuple_header(std::ostream &os, const ProjectOperator &oper, bool is_multi_table)
+void print_tuple_header(std::ostream &os, const ProjectOperator &oper, bool is_multi_table, 
+                        std::vector<TreeExpr *> &query_expr, std::vector<std::pair<bool, int>> &fields_or_expr)
 {
-  const int cell_num = oper.tuple_cell_num();
+  // const int cell_num = oper.tuple_cell_num();
   const TupleCellSpec *cell_spec = nullptr;
-  for (int i = 0; i < cell_num; i++) {
-    oper.tuple_cell_spec_at(i, cell_spec);
+  for (size_t i=0; i < fields_or_expr.size(); i++) {
     if (i != 0) {
       os << " | ";
     }
-    if (is_multi_table && cell_spec->table_name()) {
-      os << cell_spec->table_name() << ".";
-    }
-    if (cell_spec->alias()) {
-      os << cell_spec->alias();
+    if (fields_or_expr[i].first) {
+      oper.tuple_cell_spec_at(fields_or_expr[i].second, cell_spec);
+      if (is_multi_table && cell_spec->table_name()) {
+        os << cell_spec->table_name() << ".";
+      }
+      if (cell_spec->alias()) {
+        os << cell_spec->alias();
+      }
+    } else {
+      query_expr[fields_or_expr[i].second]->to_string(os, is_multi_table);
     }
   }
-
-  if (cell_num > 0) {
+  if (fields_or_expr.size() > 0) {
     os << '\n';
   }
 }
-void tuple_to_string(std::ostream &os, const Tuple &tuple)
+
+void tuple_to_string(std::ostream &os, const Tuple &tuple, std::vector<TreeExpr *> &query_expr, std::vector<std::pair<bool, int>> &fields_or_expr)
 {
   TupleCell cell;
   RC rc = RC::SUCCESS;
   bool first_field = true;
-  for (int i = 0; i < tuple.cell_num(); i++) {
-    rc = tuple.cell_at(i, cell);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to fetch field of cell. index=%d, rc=%s", i, strrc(rc));
-      break;
-    }
 
+  for (size_t i=0; i < fields_or_expr.size(); i++) {
     if (!first_field) {
       os << " | ";
     } else {
       first_field = false;
+    }
+    if (fields_or_expr[i].first) {
+      rc = tuple.cell_at(fields_or_expr[i].second, cell);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to fetch field of cell. index=%d, rc=%s", i, strrc(rc));
+        break;
+      }
+    } else {
+      rc = query_expr[fields_or_expr[i].second]->get_value(tuple, cell);
+      if (rc != RC::SUCCESS) {
+        break;
+      }
     }
     cell.to_string(os);
   }
@@ -310,6 +322,10 @@ IndexScanOperator *try_to_create_index_scan_operator(std::vector<FilterUnit *> &
       return nullptr;
     }
 
+    // 如果含有表达式先不使用索引，但其实可以修改一下，适配表达式？
+    if (left->type() == ExprType::TREE || right->type() == ExprType::TREE) {
+      return nullptr;
+    }
     if (left->type() == ExprType::FIELD && right->type() == ExprType::VALUE) {
     } else if (left->type() == ExprType::VALUE && right->type() == ExprType::FIELD) {
       std::swap(left, right);
@@ -759,8 +775,35 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     agg_oper.add_child(&project_oper);
     agg_oper.open();
     std::stringstream ss;
-    agg_oper.print_header(ss);
-    agg_oper.to_string(ss);
+    // 如果是聚合，那么
+    auto fields_or_expr = select_stmt->fields_or_expr();
+    auto query_expr = select_stmt->query_expr();
+    for (size_t i = 0; i < fields_or_expr.size(); i++) {
+        if (i != 0) {
+          ss << " | ";
+        }
+        if (fields_or_expr[i].first) {
+          agg_oper.print_header_at(ss, fields_or_expr[i].second);
+        } else {
+          query_expr[fields_or_expr[i].second]->to_string(ss, false);
+        }
+    }
+    ss << std::endl;
+    auto tuple = agg_oper.get_result_tuple();
+    for (size_t i=0; i<fields_or_expr.size(); i++) {
+      if (i != 0) {
+        ss << " | ";
+      }
+      if (fields_or_expr[i].first) {
+        agg_oper.to_string_at(ss, fields_or_expr[i].second);
+      } else {
+        TupleCell cell;
+        query_expr[fields_or_expr[i].second]->get_value(tuple, cell);
+        cell.to_string(ss);
+      }
+
+    }
+    // agg_oper.to_string(ss);
     ss << std::endl;
     if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
       LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
@@ -780,7 +823,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   }
 
   std::stringstream ss;
-  print_tuple_header(ss, project_oper, select_stmt->tables().size() > 1);
+  print_tuple_header(ss, project_oper, select_stmt->tables().size() > 1, select_stmt->query_expr(), select_stmt->fields_or_expr());
   while ((rc = project_oper.next()) == RC::SUCCESS) {
     // get current record
     // write to response
@@ -791,7 +834,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
       break;
     }
 
-    tuple_to_string(ss, *tuple);
+    tuple_to_string(ss, *tuple, select_stmt->query_expr(), select_stmt->fields_or_expr());
     ss << std::endl;
   }
 
