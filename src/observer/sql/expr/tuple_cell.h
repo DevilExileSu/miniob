@@ -100,12 +100,26 @@ public:
       res_cell.set_data((char *)res);
     } else if ((attr_type_ == INTS || attr_type_ == FLOATS) && cell.attr_type_ == CHARS) {
       float *res = (float *)malloc(sizeof(float));
-      *res = *(float *)this->data_ + atof(cell.data_);
+      float this_data;
+      float other_data = atof(cell.data_);
+      if (attr_type_ == INTS) {
+        this_data = *(int *)this->data_;
+      } else {
+        this_data = *(float *)this->data_;
+      }
+      *res = this_data + other_data;
       res_cell.attr_type_ = FLOATS;
       res_cell.set_data((char *)res);
     } else if (attr_type_ == CHARS && (cell.attr_type_ == INTS || cell.attr_type_ == FLOATS)) {
        float *res = (float *)malloc(sizeof(float));
-      *res = atof(this->data_) + *(float *)cell.data_;
+      float this_data = atof(this->data_);
+      float other_data;
+      if (cell.attr_type_ == INTS) {
+        other_data = *(int *)cell.data_;
+      } else {
+        other_data = *(float *)cell.data_;
+      }
+      *res = this_data + other_data;
       res_cell.attr_type_ = FLOATS;
       res_cell.set_data((char *)res);
     }
@@ -158,12 +172,26 @@ public:
       res_cell.set_data((char *)res);
     } else if ((attr_type_ == INTS || attr_type_ == FLOATS) && cell.attr_type_ == CHARS) {
       float *res = (float *)malloc(sizeof(float));
-      *res = *(float *)this->data_ - atof(cell.data_);
+      float this_data;
+      float other_data = atof(cell.data_);
+      if (attr_type_ == INTS) {
+        this_data = *(int *)this->data_;
+      } else {
+        this_data = *(float *)this->data_;
+      }
+      *res = this_data - other_data;
       res_cell.attr_type_ = FLOATS;
       res_cell.set_data((char *)res);
-    } else if (attr_type_ == CHARS && (attr_type_ == INTS || attr_type_ == FLOATS)) {
-       float *res = (float *)malloc(sizeof(float));
-      *res = atof(this->data_) - *(float *)cell.data_;
+    } else if (attr_type_ == CHARS && (cell.attr_type_ == INTS || cell.attr_type_ == FLOATS)) {
+      float *res = (float *)malloc(sizeof(float));
+      float this_data = atof(this->data_);
+      float other_data;
+      if (cell.attr_type_ == INTS) {
+        other_data = *(int *)cell.data_;
+      } else {
+        other_data = *(float *)cell.data_;
+      }
+      *res = this_data - other_data;
       res_cell.attr_type_ = FLOATS;
       res_cell.set_data((char *)res);
     }
@@ -233,8 +261,13 @@ public:
       }
     } else if ((attr_type_ == INTS || attr_type_ == FLOATS) && cell.attr_type_ == CHARS) {
       float *res = (float *)malloc(sizeof(float));
-      float this_data = *(float *)this->data_;
+      float this_data;
       float other_data = atof(cell.data_);
+      if (attr_type_ == INTS) {
+        this_data = *(int *)this->data_;
+      } else {
+        this_data = *(float *)this->data_;
+      }
       if (other_data > epsilon) {
         *res = this_data / other_data;
         res_cell.attr_type_ = FLOATS;
@@ -243,7 +276,12 @@ public:
     } else if (attr_type_ == CHARS && (cell.attr_type_ == INTS || cell.attr_type_ == FLOATS)) {
       float *res = (float *)malloc(sizeof(float));
       float this_data = atof(this->data_);
-      float other_data = *(float *)cell.data_;
+      float other_data;
+      if (cell.attr_type_ == INTS) {
+        other_data = *(int *)cell.data_;
+      } else {
+        other_data = *(float *)cell.data_;
+      }
       if (other_data > epsilon) {
         *res = this_data / other_data;
         res_cell.attr_type_ = FLOATS;
@@ -298,15 +336,25 @@ public:
       res_cell.set_data((char *)res);
     } else if ((attr_type_ == INTS || attr_type_ == FLOATS) && cell.attr_type_ == CHARS) {
       float *res = (float *)malloc(sizeof(float));
-      float this_data = *(float *)this->data_;
+      float this_data;
       float other_data = atof(cell.data_);
+      if (attr_type_ == INTS) {
+        this_data = *(int *)this->data_;
+      } else {
+        this_data = *(float *)this->data_;
+      }
       *res =  this_data * other_data;
       res_cell.attr_type_ = FLOATS;
       res_cell.set_data((char *)res);
     } else if (attr_type_ == CHARS && (cell.attr_type_ == INTS || cell.attr_type_ == FLOATS)) {
       float *res = (float *)malloc(sizeof(float));
       float this_data = atof(this->data_);
-      float other_data = *(float *)cell.data_;
+      float other_data;
+      if (cell.attr_type_ == INTS) {
+        other_data = *(int *)cell.data_;
+      } else {
+        other_data = *(float *)cell.data_;
+      }
       *res =  this_data * other_data;
       res_cell.attr_type_ = FLOATS;
       res_cell.set_data((char *)res);

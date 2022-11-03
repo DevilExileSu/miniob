@@ -51,36 +51,40 @@ RC AggregateOperator::close()
 }
 
 void AggregateOperator::print_header_at(std::ostream &os, int i) {
-    switch (rel_attrs_[i].agg_func) {
-        case MAX: {
-            os << "max(";
-            break;
+    if (rel_attrs_[i].alias == nullptr) {
+        switch (rel_attrs_[i].agg_func) {
+            case MAX: {
+                os << "max(";
+                break;
+            }
+            case MIN: {
+                os << "min(";
+                break;
+            }
+            case AVG: {
+                os << "avg(";
+                break;
+            }
+            case COUNT: {
+                os << "count(" ;
+                break;
+            }
+            case SUM: {
+                os<< "sum(";
+                break; 
+            }
+            default: {
+                os << "error()";
+                break;             
+            }
         }
-        case MIN: {
-            os << "min(";
-            break;
+        if (rel_attrs_[i].attribute_name == nullptr) {
+            os << rel_attrs_[i].num << ")";
+        } else {
+            os << rel_attrs_[i].attribute_name << ")";
         }
-        case AVG: {
-            os << "avg(";
-            break;
-        }
-        case COUNT: {
-            os << "count(" ;
-            break;
-        }
-        case SUM: {
-            os<< "sum(";
-            break; 
-        }
-        default: {
-            os << "error()";
-            break;             
-        }
-    }
-    if (rel_attrs_[i].attribute_name == nullptr) {
-        os << rel_attrs_[i].num << ")";
     } else {
-        os << rel_attrs_[i].attribute_name << ")";
+        os << rel_attrs_[i].alias;
     }
 }
 
