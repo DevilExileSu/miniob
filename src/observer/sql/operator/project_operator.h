@@ -23,6 +23,9 @@ class ProjectOperator : public Operator
 public:
   ProjectOperator()
   {}
+  
+  ProjectOperator(std::vector<Field> &group_fields) : group_fields_(group_fields)
+  {}
 
   virtual ~ProjectOperator() = default;
 
@@ -47,8 +50,14 @@ public:
     return OperatorType::OTHER;
   }
   RC tuple_cell_spec_at(int index, const TupleCellSpec *&spec) const;
-
+  std::unordered_map<std::string, std::vector<std::shared_ptr<Tuple>>> &group_tuples() {
+    return group_tuples_;
+  }
   Tuple * current_tuple() override;
+
 private:
   ProjectTuple tuple_;
+    // 处理group by
+  std::unordered_map<std::string, std::vector<std::shared_ptr<Tuple>>> group_tuples_;
+  std::vector<Field> group_fields_;
 };

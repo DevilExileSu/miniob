@@ -239,6 +239,17 @@ class CompositeTuple : public Tuple
 {
 public:
   CompositeTuple() = default;
+
+  CompositeTuple(const CompositeTuple &tuple) {
+    this->tuples_ = tuple.tuples_;
+    this->speces_ = tuple.speces_;
+  }
+  CompositeTuple& operator=(const CompositeTuple &tuple) {
+    this->tuples_ = tuple.tuples_;
+    this->speces_ = tuple.speces_;
+    return *this;
+  }
+
   virtual ~CompositeTuple()
   {
     tuples_.clear();

@@ -290,7 +290,7 @@ bool CrossProductOperator::do_predicate(CompositeTuple &tuple)
 
 Tuple *CrossProductOperator::current_tuple()
 {
-  return &tuple_;
+  return &tuple_set_.back();
 }
 
 

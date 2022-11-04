@@ -442,6 +442,7 @@ void selects_append_group_by(Selects *selects, RelAttr *attr) {
 
 void selects_append_having(Selects *selects, Having *having) {
   selects->having = *having;
+  selects->has_having = 1;
 }
 
 void selects_destroy(Selects *selects)

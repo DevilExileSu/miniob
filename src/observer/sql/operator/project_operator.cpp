@@ -37,7 +37,35 @@ RC ProjectOperator::open()
 
 RC ProjectOperator::next()
 {
-  return children_[0]->next();
+  RC rc = children_[0]->next();
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+  Tuple *tuple = children_[0]->current_tuple();
+  std::stringstream key_ss;
+  for (auto group_field : group_fields_) {
+    TupleCell cell; 
+    tuple->find_cell(group_field, cell);
+    // 同一字段类型一定相同，除了NULL_
+    key_ss << group_field.table_name() << " " 
+      << group_field.field_name() << " ";
+    if (cell.attr_type() != NULL_) {
+      key_ss << cell.data() << " ";
+    } else {
+      // 如果数值为NULL就先放进去一个NULL
+      key_ss << "NULL_ ";
+    }
+  }
+  if (tuple->type() == TupleType::ROW) {
+    RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+    Record *new_record = new Record(row_tuple->record());
+    row_tuple->set_record(new_record);
+    group_tuples_[key_ss.str()].emplace_back(std::make_shared<RowTuple>(*row_tuple));
+  } else if (tuple->type() == TupleType::COMPOSITE) {
+    CompositeTuple *comp_tuple = static_cast<CompositeTuple *>(tuple);
+    group_tuples_[key_ss.str()].emplace_back(std::make_shared<CompositeTuple>(*comp_tuple));
+  }
+  return rc;
 }
 
 RC ProjectOperator::close()
@@ -56,11 +84,11 @@ void ProjectOperator::add_projection(const Table *table, const Field *field)
   // 对单表来说，展示的(alias) 字段总是字段名称，
   // 对多表查询来说，展示的alias 需要带表名字
   TupleCellSpec *spec = new TupleCellSpec(new FieldExpr(table, field->meta()));
-  // TODO(vanish): alias: 如果field_meta没有别名，才会使用field_meta->name()
+  // alias: 如果field_meta没有别名，才会使用field_meta->name()
   // 只有当列的别名为空时，才会设置表名
   if (common::is_blank(field->alias())) {
-    // TODO(vanish): alias: 如果table没有别名，才会使用table->name()
-    // TODO(vanish): 因为别名只在一次查询中有效，因此，添加完毕spec之后，清空table的别名，清空fileld_meta的别名
+    // alias: 如果table没有别名，才会使用table->name()
+    // 因为别名只在一次查询中有效，因此，添加完毕spec之后，清空table的别名，清空fileld_meta的别名
     // 在子查询中，后面也会调用该方法能够对其别名进行清空
     if (common::is_blank(field->table_name_alias())) {
       spec->set_table_name(table->name());

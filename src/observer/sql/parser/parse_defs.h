@@ -150,8 +150,9 @@ typedef struct {
   size_t order_num;
   OrderBy order_bys[MAX_NUM];
   size_t group_num;
-  RelAttr group_bys[MAX_NUM];   
+  RelAttr group_bys[MAX_NUM];     
   Having having;
+  int has_having;
   int is_and;                     // 条件语句是and还是or
 } Selects;
 

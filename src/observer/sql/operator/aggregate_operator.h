@@ -4,6 +4,7 @@
 
 #include "sql/operator/operator.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/select_stmt.h"
 #include "sql/parser/parse_defs.h"
 #include "util/comparator.h"
 #include "util/util.h"
@@ -26,6 +27,22 @@ public:
   RC open() override;
   RC next() override;
   RC close() override;
+
+  void reset() {
+    for (size_t i=0; i<stat_.size(); i++) {
+      stat_[i].reset();
+    }
+  }
+  void add_tuple(Tuple *tuple) {
+    for (int i=0; i< rel_attrs_.size(); i++) {
+      if (rel_attrs_[i].attribute_name == nullptr) {
+          continue;
+      }
+      TupleCell cell;
+      tuple->find_cell(query_fields_[i], cell);
+      stat_[i].add_tuple(cell);
+    }
+  }
 
   Value get_result(Field field) override {
     Value res;
@@ -64,12 +81,12 @@ public:
   Tuple * current_tuple() override {
     return nullptr;
   }
-  
+
   OperatorType type() override {
     return OperatorType::OTHER;
   }
   void print_header(std::ostream &os);
-  void print_header_at(std::ostream &os, int i);
+  void print_header_at(std::ostream &os, int i, bool is_multi_table = false);
   void to_string(std::ostream &os);
   void to_string_at(std::ostream &os, int i);
   bool is_null(int index) { return stat_[index].is_null() && rel_attrs_[index].agg_func != AggFunc::COUNT; }
@@ -77,6 +94,7 @@ public:
     CustomizeTuple tuple(stat_, query_fields_);
     return tuple;
   }
+  bool do_prdicate(HavingCondition &having);
 private:
   // 多少个聚合函数
   const std::vector<RelAttr> rel_attrs_;

@@ -21,7 +21,12 @@ RC AggregateOperator::open()
     LOG_WARN("failed to open child operator: %s", strrc(rc));
     return rc;
   }
-  rc = RC::SUCCESS;
+  return rc;
+}
+
+RC AggregateOperator::next()
+{
+  RC rc = RC::SUCCESS;
   while (RC::SUCCESS == (rc = children_[0]->next())) {
     Tuple *tuple = children_[0]->current_tuple();
     if (tuple == nullptr) {
@@ -39,18 +44,13 @@ RC AggregateOperator::open()
   return rc;
 }
 
-RC AggregateOperator::next()
-{
-    return RC::RECORD_EOF; 
-}
-
 RC AggregateOperator::close()
 {
     children_[0]->close();
     return RC::SUCCESS;
 }
 
-void AggregateOperator::print_header_at(std::ostream &os, int i) {
+void AggregateOperator::print_header_at(std::ostream &os, int i, bool is_multi_table) {
     if (rel_attrs_[i].alias == nullptr) {
         switch (rel_attrs_[i].agg_func) {
             case MAX: {
@@ -81,6 +81,9 @@ void AggregateOperator::print_header_at(std::ostream &os, int i) {
         if (rel_attrs_[i].attribute_name == nullptr) {
             os << rel_attrs_[i].num << ")";
         } else {
+            if (is_multi_table) {
+                os << rel_attrs_[i].relation_name << ".";
+            }
             os << rel_attrs_[i].attribute_name << ")";
         }
     } else {
@@ -217,4 +220,38 @@ void AggregateOperator::to_string(std::ostream &os) {
             }
         }
     }
+}
+
+
+bool AggregateOperator::do_prdicate(HavingCondition &having) {
+    AggFunc agg_func = having.agg_func;
+    CustomizeTuple tuple = get_result_tuple();
+    TupleCell cell1;
+    tuple.find_cell(having.field, cell1, agg_func);
+    TupleCell cell2 = having.value_cell;
+    bool has_null = (cell1.attr_type() == NULL_);
+    int compare = cell1.compare(cell2);
+    switch (having.comp) {
+        case EQUAL_TO: {
+            return (0 == compare && !has_null) ; 
+        } 
+        case LESS_EQUAL: {
+            return (compare <= 0 && !has_null); 
+        }
+        case NOT_EQUAL: {
+            return (compare != 0 && !has_null);
+        }
+        case LESS_THAN: {
+            return (compare < 0 && !has_null);
+        }
+        case GREAT_EQUAL: {
+            return (compare >= 0 && !has_null);
+        }
+        case GREAT_THAN: {
+            return (compare > 0 && !has_null);
+        }
+        default:
+            return false;
+    }
+
 }
