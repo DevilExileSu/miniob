@@ -822,12 +822,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
       agg_oper.reset();
       std::vector<AggregateStat> stats(rel_attrs.size());
       for (auto tuple: group_tuple.second) {
-        for (int i=0; i< rel_attrs.size(); i++) {
-          if (rel_attrs[i].attribute_name == nullptr) {
-              continue;
-          }
-          agg_oper.add_tuple(tuple.get());
-        }
+        agg_oper.add_tuple(tuple.get());
       }
       if (select_stmt->has_having() && !agg_oper.do_prdicate(select_stmt->having())) {
         continue;
