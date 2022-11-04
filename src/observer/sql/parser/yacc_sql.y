@@ -34,7 +34,16 @@ typedef struct ParserContext {
   Exp *expressions[MAX_NUM];
   
   size_t expression_attr_num;
+  
+  // order_by和group_by、having不考虑子查询
+  size_t order_num;
+  OrderBy order_by[MAX_NUM];
 
+  size_t group_num;
+  RelAttr group_by;
+
+  size_t having_num;
+  RelAttr having_attrs;
   // size_t 
   Value values[MAX_NUM];
   Condition conditions[MAX_NUM];
@@ -141,6 +150,11 @@ ParserContext *get_context(yyscan_t scanner)
 		COUNT_T
 		AVG_T
 		SUM_T
+		ASC
+		ORDER
+		GROUP
+		BY
+		HAVING
 		LIKE
         EQ
         LT
@@ -186,6 +200,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <number> comOp;
 %type <string> alias_ID;
 %type <exp1> exp;
+%type <number> order;
 
 %%
 
@@ -582,7 +597,7 @@ select_begin:
 	}
 	;
 select_clause: 
-	select_begin select_attr FROM ID alias_ID rel_list where {
+	select_begin select_attr FROM ID alias_ID rel_list where group_by order_by {
 		// 当进入该语句中时，depth一定是>=1的，不用担心越界问题
 		// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
 		// selects_append_relation(&CONTEXT->selections[CONTEXT->select_num], $4);
@@ -615,7 +630,7 @@ select_clause:
 		CONTEXT->select_length=0;
 		++CONTEXT->select_num;
 	}
-	| select_begin select_attr FROM ID alias_ID INNER JOIN ID alias_ID ON condition condition_list join_list where {
+	| select_begin select_attr FROM ID alias_ID INNER JOIN ID alias_ID ON condition condition_list join_list where group_by order_by {
 		// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
 
 		selects_append_relation_with_alias(&CONTEXT->selections[CONTEXT->select_num], $8, $9);
@@ -658,6 +673,107 @@ select:				/*  select 语句的语法解析树*/
 		CONTEXT->ssql->sstr.selection = CONTEXT->selections[CONTEXT->select_num-1];
 	}
 	;
+
+
+order_by:
+	/* empty */
+	| ORDER BY order_item order_item_list {
+		
+	}
+	;
+
+order_item_list:
+	/* empty */
+	| COMMA order_item order_item_list {}
+	; 
+
+order_item:
+	ID order {
+		RelAttr attr;
+		relation_attr_init(&attr, NULL, $1);
+		OrderBy order_by; 
+		order_by_init(&order_by, &attr, $2);
+		selects_append_order_by(&CONTEXT->selections[CONTEXT->select_num], &order_by);
+	}
+	| ID DOT ID order {
+		RelAttr attr;
+		relation_attr_init(&attr, $1, $3);
+		OrderBy order_by;
+		order_by_init(&order_by, &attr, $4);
+		selects_append_order_by(&CONTEXT->selections[CONTEXT->select_num], &order_by);
+	}
+	;
+order: 
+	{ $$ = 0; }
+	| ASC { $$ = 0; }
+	| DESC { $$ = 1; }
+
+
+group_by: 
+	| GROUP BY group_item group_item_list having {
+	}
+	;
+
+group_item_list:
+	/* empty */
+	| COMMA group_item group_item_list {}
+	; 
+
+group_item: 
+	ID {
+		RelAttr attr;	
+		relation_attr_init(&attr, NULL, $1);
+		selects_append_group_by(&CONTEXT->selections[CONTEXT->select_num], &attr);
+	}
+	| ID DOT ID {
+		RelAttr attr;
+		relation_attr_init(&attr, $1, $3);
+		selects_append_group_by(&CONTEXT->selections[CONTEXT->select_num], &attr);
+	}
+	;
+having: 
+	| HAVING agg_func LBRACE STAR RBRACE comOp value_with_neg {
+		RelAttr attr;
+		relation_attr_init_with_agg(&attr, NULL, "*", $2, NULL);
+		Having having;
+		having_init(&having, &attr, &CONTEXT->values[CONTEXT->value_length-1], $6, 0);
+		selects_append_having(&CONTEXT->selections[CONTEXT->select_num], &having);
+	} 
+	| HAVING agg_func LBRACE ID RBRACE comOp value_with_neg {
+		RelAttr attr;
+		relation_attr_init_with_agg(&attr, NULL, $4, $2, NULL);
+		Having having;
+		having_init(&having, &attr, &CONTEXT->values[CONTEXT->value_length-1], $6, 0);
+		selects_append_having(&CONTEXT->selections[CONTEXT->select_num], &having);
+	}
+	| HAVING agg_func LBRACE ID DOT ID RBRACE comOp value_with_neg {
+		RelAttr attr;
+		relation_attr_init_with_agg(&attr, $4, $6, $2, NULL);
+		Having having;
+		having_init(&having, &attr, &CONTEXT->values[CONTEXT->value_length-1], $8, 0);
+		selects_append_having(&CONTEXT->selections[CONTEXT->select_num], &having);
+	}
+	| HAVING value_with_neg comOp agg_func LBRACE STAR RBRACE  {
+		RelAttr attr;
+		relation_attr_init_with_agg(&attr, NULL, "*", $4, NULL);
+		Having having;
+		having_init(&having, &attr, &CONTEXT->values[CONTEXT->value_length-1], $3, 1);
+		selects_append_having(&CONTEXT->selections[CONTEXT->select_num], &having);
+	}
+	| HAVING value_with_neg comOp agg_func LBRACE ID RBRACE {
+		RelAttr attr;
+		relation_attr_init_with_agg(&attr, NULL, $6, $4, NULL);
+		Having having;
+		having_init(&having, &attr, &CONTEXT->values[CONTEXT->value_length-1], $3, 1);
+		selects_append_having(&CONTEXT->selections[CONTEXT->select_num], &having);
+	}
+	| HAVING value_with_neg comOp agg_func LBRACE ID DOT ID RBRACE {
+		RelAttr attr;
+		relation_attr_init_with_agg(&attr, $6, $8, $4, NULL);
+		Having having;
+		having_init(&having, &attr, &CONTEXT->values[CONTEXT->value_length-1], $3, 1);
+		selects_append_having(&CONTEXT->selections[CONTEXT->select_num], &having);
+	}
 
 join_list:
 	| INNER JOIN ID ON condition condition_list join_list

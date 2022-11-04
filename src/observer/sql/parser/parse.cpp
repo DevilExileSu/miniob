@@ -197,6 +197,44 @@ void value_init_set(Value *value, Value values[], int begin, int set_size) {
   value->set_size = set_size;
 }
 
+void order_by_init(OrderBy *order_by, RelAttr *relation, int order) {
+   // 0是asc，1是desc
+   order_by->order = order;
+   order_by->attr = *relation;
+}
+
+
+void order_by_destroy(OrderBy *order_by) {
+  order_by->order = 0;
+}
+
+void switch_comp_op(CompOp *comp) {
+    switch (*comp) {
+    case EQUAL_TO:    { *comp = EQUAL_TO; }    break;
+    case LESS_EQUAL:  { *comp = GREAT_EQUAL; }  break;
+    case NOT_EQUAL:   { *comp = NOT_EQUAL; }   break;
+    case LESS_THAN:   { *comp = GREAT_THAN; } break;
+    case GREAT_EQUAL: { *comp = LESS_EQUAL; }   break;
+    case GREAT_THAN:  { *comp = LESS_THAN; }  break;
+    default: break;
+    }
+}
+
+
+void having_init(Having *having, RelAttr *attr, Value *value, CompOp comp, int swap) {
+  having->attr = *attr;
+  having->value = *value;
+  if (swap == 1) {
+    switch_comp_op(&comp);
+  }
+  having->comp = comp;
+}
+
+void having_destroy(Having *having) {
+  relation_attr_destroy(&having->attr);
+  value_destroy(&having->value);
+}
+
 void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
     int right_is_attr, RelAttr *right_attr, Value *right_value)
 {
@@ -308,19 +346,19 @@ void expression_destroy(Exp *exp)
   
   if (exp->expr_type == VAL) {
     value_destroy(exp->value);
-    exp->left_expr == nullptr;
-    exp->right_expr == nullptr;
+    exp->left_expr = nullptr;
+    exp->right_expr = nullptr;
     return;
   }
   exp->expr_type = NO_EXP;
   if (exp->left_expr != nullptr) {
     expression_destroy(exp->left_expr);
-    exp->left_expr == nullptr;
+    exp->left_expr = nullptr;
   }
 
   if (exp->right_expr != nullptr) {
     expression_destroy(exp->right_expr);
-    exp->right_expr == nullptr;
+    exp->right_expr = nullptr;
   }
 }
 void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length, int nullable)
@@ -392,6 +430,20 @@ void selects_append_conditions(Selects *selects, Condition conditions[], size_t 
   selects->condition_num = condition_num;
 }
 
+void selects_append_order_by(Selects *selects, OrderBy *order_by) {
+  selects->order_bys[selects->order_num++] = *order_by;
+}
+
+
+void selects_append_group_by(Selects *selects, RelAttr *attr) {
+  selects->group_bys[selects->group_num++] = *attr;
+}
+
+
+void selects_append_having(Selects *selects, Having *having) {
+  selects->having = *having;
+}
+
 void selects_destroy(Selects *selects)
 {
   for (size_t i = 0; i < selects->attr_num; i++) {
@@ -415,6 +467,15 @@ void selects_destroy(Selects *selects)
     expression_destroy(selects->exp[i]);
   }
   selects->condition_num = 0;
+
+  for (size_t i=0; i<selects->order_num; i++) {
+    order_by_destroy(&selects->order_bys[i]);
+  }
+  selects->order_num = 0;
+  for (size_t i=0; i<selects->group_num; i++) {
+    relation_attr_destroy(&selects->group_bys[i]);
+  }
+  selects->group_num = 0;
 }
 
 void insert_init(Insert *insert, Value values[], size_t value_num) {

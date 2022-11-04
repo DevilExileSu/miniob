@@ -39,7 +39,7 @@
 # define YY_YY_YACC_SQL_TAB_H_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
-# define YYDEBUG 0
+# define YYDEBUG 1
 #endif
 #if YYDEBUG
 extern int yydebug;
@@ -110,22 +110,27 @@ extern int yydebug;
     COUNT_T = 311,                 /* COUNT_T  */
     AVG_T = 312,                   /* AVG_T  */
     SUM_T = 313,                   /* SUM_T  */
-    LIKE = 314,                    /* LIKE  */
-    EQ = 315,                      /* EQ  */
-    LT = 316,                      /* LT  */
-    GT = 317,                      /* GT  */
-    LE = 318,                      /* LE  */
-    GE = 319,                      /* GE  */
-    NE = 320,                      /* NE  */
-    NUMBER = 321,                  /* NUMBER  */
-    FLOAT = 322,                   /* FLOAT  */
-    DATE = 323,                    /* DATE  */
-    TEXT = 324,                    /* TEXT  */
-    ID = 325,                      /* ID  */
-    PATH = 326,                    /* PATH  */
-    SSS = 327,                     /* SSS  */
-    STAR = 328,                    /* STAR  */
-    STRING_V = 329                 /* STRING_V  */
+    ASC = 314,                     /* ASC  */
+    ORDER = 315,                   /* ORDER  */
+    GROUP = 316,                   /* GROUP  */
+    BY = 317,                      /* BY  */
+    HAVING = 318,                  /* HAVING  */
+    LIKE = 319,                    /* LIKE  */
+    EQ = 320,                      /* EQ  */
+    LT = 321,                      /* LT  */
+    GT = 322,                      /* GT  */
+    LE = 323,                      /* LE  */
+    GE = 324,                      /* GE  */
+    NE = 325,                      /* NE  */
+    NUMBER = 326,                  /* NUMBER  */
+    FLOAT = 327,                   /* FLOAT  */
+    DATE = 328,                    /* DATE  */
+    TEXT = 329,                    /* TEXT  */
+    ID = 330,                      /* ID  */
+    PATH = 331,                    /* PATH  */
+    SSS = 332,                     /* SSS  */
+    STAR = 333,                    /* STAR  */
+    STRING_V = 334                 /* STRING_V  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -134,7 +139,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 153 "yacc_sql.y"
+#line 167 "yacc_sql.y"
 
   struct _Attr *attr1;
   struct _Condition *condition1;
@@ -145,7 +150,7 @@ union YYSTYPE
   char *position;
   struct _Exp *exp1;
 
-#line 149 "yacc_sql.tab.h"
+#line 154 "yacc_sql.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;
