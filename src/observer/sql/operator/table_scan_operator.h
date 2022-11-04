@@ -39,6 +39,9 @@ public:
     value_init_null(&res);
     return res;
   }
+  OperatorType type() override {
+    return OperatorType::OTHER;
+  }
   // int tuple_cell_num() const override
   // {
   //   return tuple_.cell_num();

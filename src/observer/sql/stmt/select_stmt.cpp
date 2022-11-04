@@ -510,7 +510,29 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
       FilterStmt::create(db, default_table, &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct filter stmt");
-    return rc;
+    return rc     ;
+  }
+
+  std::unordered_map<size_t, bool> fields_order;
+  for (size_t i=0; i < select_sql.order_num; i++) {
+    const RelAttr *attr = &select_sql.order_bys[i].attr;
+    Table *table = nullptr;
+    if (attr->relation_name != nullptr) {
+      auto iter = table_map.find(attr->relation_name);
+      if (iter == table_map.end()) {
+        return RC::SCHEMA_FIELD_MISSING;
+      } 
+      table = iter->second;
+    } else {
+      table = default_table;
+    }
+    const FieldMeta *field_meta = table->table_meta().field(attr->attribute_name);
+    if (nullptr == field_meta) {
+      LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), attr->attribute_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    } 
+    size_t field_ptr = reinterpret_cast<size_t>(field_meta);
+    fields_order.insert(std::make_pair(field_ptr, select_sql.order_bys[i].order == 0));
   }
 
   // std::reverse(rel_attrs.begin(), rel_attrs.end());
@@ -524,6 +546,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->fields_or_expr_.swap(fields_or_expr);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->is_and_ = select_sql.is_and;
+  select_stmt->tuple_comparetor_.fields_ = select_stmt->query_fields_;
+  select_stmt->tuple_comparetor_.fields_order_.swap(fields_order);
   stmt = select_stmt;
   return RC::SUCCESS;
 }

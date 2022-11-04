@@ -20,6 +20,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/stmt.h"
 #include "storage/common/field.h"
 #include "sql/expr/expression.h"
+#include "sql/expr/tuple.h"
 
 class FieldMeta;
 class FilterStmt;
@@ -59,7 +60,10 @@ public:
 
   std::vector<std::pair<bool, int>> &fields_or_expr()  { return fields_or_expr_; }
   std::vector<TreeExpr *> &query_expr() { return query_expr_; }
-  
+  TupleComparetor &comparetor() {
+    return tuple_comparetor_;
+  }
+  bool has_order() { return !tuple_comparetor_.fields_order_.empty(); }
 
 private:
   std::vector<Field> query_fields_;
@@ -70,5 +74,6 @@ private:
   // true表示存在query_fields_中，false表示存在query_expr_
   std::vector<std::pair<bool, int>> fields_or_expr_;
   std::vector<TreeExpr *> query_expr_;
+  TupleComparetor tuple_comparetor_;
   bool is_and_ = true;
 };

@@ -489,3 +489,44 @@ private:
   std::vector<Field> fields_;
   std::vector<AggregateStat> stat_;
 };
+
+typedef struct TupleComparetor {
+  
+  bool operator() (Tuple *tuple1, Tuple *tuple2) {
+    for (size_t i=0; i<fields_.size(); i++) {
+      TupleCell cell1, cell2;
+      tuple1->find_cell(fields_[i], cell1);
+      tuple2->find_cell(fields_[i], cell2);
+      
+      size_t field_ptr = reinterpret_cast<size_t>(fields_[i].meta());
+      // 默认是升序
+      bool order = true;
+      auto iter = fields_order_.find(field_ptr);
+      if (iter != fields_order_.end()) {
+        order = fields_order_[field_ptr];
+      }
+      if (cell1.attr_type() == NULL_ && cell2.attr_type() != NULL_){
+        return order;
+      } else if (cell1.attr_type() != NULL_ && cell2.attr_type() == NULL_) {
+        return !order;
+      } else if (cell1.attr_type() == NULL_ && cell2.attr_type() == NULL_) {
+        continue;
+      } else {
+        int compare = cell1.compare(cell2);
+        if (compare == 0) {
+          continue;
+        } else {
+          if (order) {
+            return compare < 0;
+          } else {
+            return compare > 0;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  std::vector<Field> fields_;
+  std::unordered_map<size_t, bool> fields_order_;
+} TupleComparetor;

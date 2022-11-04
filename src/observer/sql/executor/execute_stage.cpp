@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include <sstream>
 #include <map>
 #include <unordered_map>
+#include <algorithm>
 
 #include "execute_stage.h"
 
@@ -824,26 +825,82 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 
   std::stringstream ss;
   print_tuple_header(ss, project_oper, select_stmt->tables().size() > 1, select_stmt->query_expr(), select_stmt->fields_or_expr());
-  while ((rc = project_oper.next()) == RC::SUCCESS) {
-    // get current record
-    // write to response
-    Tuple *tuple = project_oper.current_tuple();
-    if (nullptr == tuple) {
-      rc = RC::INTERNAL;
-      LOG_WARN("failed to get current record. rc=%s", strrc(rc));
-      break;
+  if (select_stmt->has_order()) {
+    while ((rc = project_oper.next()) == RC::SUCCESS) {
+
     }
-
-    tuple_to_string(ss, *tuple, select_stmt->query_expr(), select_stmt->fields_or_expr());
-    ss << std::endl;
-  }
-
-  if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
-    LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
-    session_event->set_response("FAILURE\n");
-    return rc;
+    if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
+      LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
+      session_event->set_response("FAILURE\n");
+      return rc;
+    } else {
+      rc = project_oper.close();
+    }
+    Operator *child_oper = project_oper.get_child();
+    if (child_oper->type() == OperatorType::CROSS_PRODUCT) {
+      auto cross_oper = static_cast<CrossProductOperator *>(child_oper);
+      auto tuple_set = cross_oper->tuple_set();
+      std::sort(tuple_set.begin(), tuple_set.end(), [&](CompositeTuple &tuple1, CompositeTuple &tuple2) {
+        TupleComparetor comparetor = select_stmt->comparetor();
+        return comparetor(&tuple1, &tuple2);
+      });
+      for (size_t i = 0; i < tuple_set.size(); i++) {
+        bool first = true;
+        for (const Field &field : select_stmt->query_fields()) {
+          TupleCell cell;
+          tuple_set[i].find_cell(field, cell);
+          if (!first) {
+            ss << " | ";
+          } else {
+            first = false;
+          }
+          cell.to_string(ss);
+        }
+        ss << std::endl;
+      }
+    } else if (child_oper->type() == OperatorType::PREDICATE){
+      auto pred_oper = static_cast<PredicateOperator *>(child_oper);
+      auto tuple_set = pred_oper->tuple_set();
+      std::sort(tuple_set.begin(), tuple_set.end(), [&](RowTuple &tuple1, RowTuple &tuple2) {
+        TupleComparetor comparetor = select_stmt->comparetor();
+        return comparetor(&tuple1, &tuple2);
+      });
+      for (size_t i = 0; i < tuple_set.size(); i++) {
+        bool first = true;
+        for (const Field &field : select_stmt->query_fields()) {
+          TupleCell cell;
+          tuple_set[i].find_cell(field, cell);
+          if (!first) {
+            ss << " | ";
+          } else {
+            first = false;
+          }
+          cell.to_string(ss);
+        }
+        ss << std::endl;
+      }
+    }
   } else {
-    rc = project_oper.close();
+    while ((rc = project_oper.next()) == RC::SUCCESS) {
+      // get current record
+      // write to response
+      Tuple *tuple = project_oper.current_tuple();
+      if (nullptr == tuple) {
+        rc = RC::INTERNAL;
+        LOG_WARN("failed to get current record. rc=%s", strrc(rc));
+        break;
+      }
+
+      tuple_to_string(ss, *tuple, select_stmt->query_expr(), select_stmt->fields_or_expr());
+      ss << std::endl;
+    }
+    if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
+      LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
+      session_event->set_response("FAILURE\n");
+      return rc;
+    } else {
+      rc = project_oper.close();
+    }
   }
   session_event->set_response(ss.str());
   return rc;

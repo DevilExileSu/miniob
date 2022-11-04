@@ -51,6 +51,13 @@ public:
     return value;
   }
 
+  const std::vector<CompositeTuple> &tuple_set() const {
+    return tuple_set_;
+  } 
+
+  OperatorType type() override {
+    return OperatorType::CROSS_PRODUCT;
+  }
 private:
   bool do_predicate(CompositeTuple &tuple);
 

@@ -27,6 +27,9 @@ public:
     value_init_null(&res);
     return res;
   }
+  OperatorType type() override {
+    return OperatorType::OTHER;
+  }
   //int tuple_cell_num() const override
   //RC tuple_cell_spec_at(int index, TupleCellSpec &spec) const override
 private:

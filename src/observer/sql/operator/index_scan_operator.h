@@ -34,6 +34,9 @@ public:
     value_init_null(&res);
     return res;
   }
+  OperatorType type() override {
+    return OperatorType::OTHER;
+  }
   Tuple * current_tuple() override;
 private:
   const Table *table_ = nullptr;

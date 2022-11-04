@@ -64,7 +64,10 @@ public:
   Tuple * current_tuple() override {
     return nullptr;
   }
-
+  
+  OperatorType type() override {
+    return OperatorType::OTHER;
+  }
   void print_header(std::ostream &os);
   void print_header_at(std::ostream &os, int i);
   void to_string(std::ostream &os);

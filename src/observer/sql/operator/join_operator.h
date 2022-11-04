@@ -35,6 +35,9 @@ public:
     value_init_null(&res);
     return res;
   }
+  OperatorType type() override {
+    return OperatorType::OTHER;
+  }
 private:
   Operator *left_ = nullptr;
   Operator *right_ = nullptr;
