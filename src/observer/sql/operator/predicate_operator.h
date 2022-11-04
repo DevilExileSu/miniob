@@ -68,6 +68,14 @@ public:
   }
 
   Tuple * current_tuple() override;
+
+  const std::vector<RowTuple> &tuple_set() const {
+    return tuple_set_;
+  }
+
+  OperatorType type() override {
+    return OperatorType::PREDICATE;
+  }
   //int tuple_cell_num() const override;
   //RC tuple_cell_spec_at(int index, TupleCellSpec &spec) const override;
 private:

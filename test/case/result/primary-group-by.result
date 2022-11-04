@@ -1,5 +1,5 @@
 1. CREATE TABLE
-create table t_group_by (id int, score float, name char);
+create table t_group_by (id int, score float, name char nullable);
 SUCCESS
 create table t_group_by_2 (id int, age int);
 SUCCESS
@@ -79,3 +79,11 @@ select t_group_by.id, t_group_by.name, avg(t_group_by.score), avg(t_group_by_2.a
 3 | F | 2 | 23.33
 4 | C | 3 | 20
 T_GROUP_BY.ID | T_GROUP_BY.NAME | AVG(T_GROUP_BY.SCORE) | AVG(T_GROUP_BY_2.AGE)
+
+
+
+select id, avg(score) from t_group_by group by id having count(*)>2;
+
+insert into t_group_by values(1, 3.0, null);
+
+insert into t_group_by values(3, 2.0, null);

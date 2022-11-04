@@ -25,6 +25,16 @@ See the Mulan PSL v2 for more details. */
 
 
 typedef enum {
+  ADD,
+  SUB,
+  MUL,
+  DIV,
+  VAL,
+  ATTR,
+  NO_EXP,
+} NodeType;
+
+typedef enum {
   NONE,
   MAX,
   MIN,
@@ -85,7 +95,23 @@ typedef struct _Value {
   int set_size;
 } Value;
 
+
+typedef struct _Exp{
+  NodeType expr_type;
+  Value *value;
+  RelAttr *attr;
+  // 用来打印表达式
+  int lbrace;
+  int rbrace;
+  struct _Exp *left_expr;
+  struct _Exp *right_expr;
+
+}Exp;
+
 typedef struct _Condition {
+
+  Exp *left_expr;
+  Exp *right_expr;
   int left_is_attr;    // TRUE if left-hand side is an attribute
                        // 1时，操作符左边是属性名，0时，是属性值
   Value left_value;    // left-hand side value if left_is_attr = FALSE
@@ -98,8 +124,22 @@ typedef struct _Condition {
   
 } Condition;
 
+typedef struct _OrderBy {
+  RelAttr attr;
+  int order;    // 0是asc，1是desc
+} OrderBy;
+
+
+typedef struct _Having {
+  RelAttr attr;
+  CompOp comp;
+  Value value;
+} Having;                
+
 // struct of select
 typedef struct {
+  size_t expr_num;
+  Exp *exp[MAX_NUM];
   size_t attr_num;                // Length of attrs in Select clause
   RelAttr attributes[MAX_NUM];    // attrs in Select clause
   size_t relation_num;            // Length of relations in Fro clause
@@ -107,6 +147,12 @@ typedef struct {
   char *alias[MAX_NUM];
   size_t condition_num;           // Length of conditions in Where clause
   Condition conditions[MAX_NUM];  // conditions in Where clause
+  size_t order_num;
+  OrderBy order_bys[MAX_NUM];
+  size_t group_num;
+  RelAttr group_bys[MAX_NUM];     
+  Having having;
+  int has_having;
   int is_and;                     // 条件语句是and还是or
 } Selects;
 
@@ -248,8 +294,8 @@ extern "C" {
 void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const char *attribute_name);
 void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, const char *alias_name);
 void relation_attr_destroy(RelAttr *relation_attr);
-void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, AggFunc agg);
-void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num);
+void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, AggFunc agg, const char *alias_name);
+void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num, const char *alias_name);
 
 void value_init_integer(Value *value, int v);
 void value_init_float(Value *value, float v);
@@ -261,11 +307,24 @@ void value_init_select(Value *value, Selects *v);
 void value_init_null(Value *value);
 void value_init_set(Value *value, Value values[], int begin, int set_size);
 
+void order_by_init(OrderBy *order_by, RelAttr *relation, int order);
+void order_by_destroy(OrderBy *order_by);
+
+void switch_comp_op(CompOp *comop);
+void having_init(Having *having, RelAttr *attr, Value *value, CompOp comp, int swap);
+// +、-、*、\、创建(left_expr, right_expr, NULL, NULL, ('+', '-', '*', '\'))
+// 叶子节点只能是Value或者RelAttr，Value创建(NULL, NULL, Value, NULL, VAL)，RelAttr创建(NULL, NULL, RelAttr, NULl, RelAttr)
+Exp *create_expression(Exp *left_expr, Exp *right_expr, Value *value, RelAttr *relation_attr, NodeType node_type);
+// TODO: 释放Exp *
+void expression_destroy(Exp *exp);
+
 void value_destroy(Value *value);
 
 void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
     int right_is_attr, RelAttr *right_attr, Value *right_value);
 void condition_destroy(Condition *condition);
+// 给Condition添加Exp
+void condition_init_with_exp(Condition *condition, CompOp comp, Exp *left_expr, Exp *right_expr);
 
 void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length, int nullable);
 void attr_info_destroy(AttrInfo *attr_info);
@@ -276,6 +335,10 @@ void selects_append_attribute_list(Selects *selects, RelAttr attr_list[], size_t
 void selects_append_relation(Selects *selects, const char *relation_name);
 void selects_append_relation_with_alias(Selects *selects, const char *relation_name, const char *alias_name);
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t begin, size_t condition_num);
+void selects_append_expressions(Selects *selects, Exp *expression[], size_t begin, size_t expr_num);
+void selects_append_group_by(Selects *selects, RelAttr *group_by);
+void selects_append_order_by(Selects *selects, OrderBy *order_by);
+void selects_append_having(Selects *selects, Having *having);
 void selects_destroy(Selects *selects);
 
 

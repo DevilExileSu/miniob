@@ -23,13 +23,16 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/tuple_cell.h"
 #include "sql/expr/expression.h"
 #include "storage/record/record.h"
+#include "util/util.h"
 
 class Table;
+class AggregateStat;
 
 enum class TupleType {
   ROW,
   COMPOSITE,
   PROJECT,
+  CUSTOMIZE,
 };
 
 class TupleCellSpec
@@ -236,6 +239,17 @@ class CompositeTuple : public Tuple
 {
 public:
   CompositeTuple() = default;
+
+  CompositeTuple(const CompositeTuple &tuple) {
+    this->tuples_ = tuple.tuples_;
+    this->speces_ = tuple.speces_;
+  }
+  CompositeTuple& operator=(const CompositeTuple &tuple) {
+    this->tuples_ = tuple.tuples_;
+    this->speces_ = tuple.speces_;
+    return *this;
+  }
+
   virtual ~CompositeTuple()
   {
     tuples_.clear();
@@ -389,3 +403,141 @@ private:
   std::vector<TupleCellSpec *> speces_;
   Tuple *tuple_ = nullptr;
 };
+
+
+
+class CustomizeTuple : public Tuple
+{
+public:
+  CustomizeTuple() = default;
+
+  CustomizeTuple(const std::vector<AggregateStat> &stat, const std::vector<Field> &fields) : fields_(fields), stat_(stat) {}
+
+
+  virtual ~CustomizeTuple()
+  {
+  }
+
+  TupleType type() const override {
+    return TupleType::CUSTOMIZE;
+  }
+
+  int cell_num() const override {
+    return fields_.size();
+  }
+
+  RC find_cell(const Field &field, TupleCell &cell, AggFunc agg_func) {
+    for (int i=0; i<fields_.size(); i++) {
+      if ( (0 == strcmp(field.field_name(), fields_[i].field_name())) ) {
+        switch (agg_func) {
+          case AVG: {
+            cell.set_type(AttrType::FLOATS);
+            float *avg = (float *)malloc(sizeof(float));
+            *avg = stat_[i].avg();
+            cell.set_data((char *)avg);
+            return RC::SUCCESS;
+          } break;
+          case COUNT: {
+            cell.set_type(AttrType::INTS);
+            int *count = (int *)malloc(sizeof(int));
+            *count = stat_[i].not_null_count();
+            cell.set_data((char *)count);
+            return RC::SUCCESS;
+          } break;
+          case MAX: {
+            cell.set_type(AttrType::CHARS);
+            std::string max = stat_[i].max();
+            char *c_max = (char *)malloc(max.size());
+            memcpy(c_max, max.c_str(), max.size());
+            cell.set_data(c_max);
+            return RC::SUCCESS;
+          } break;
+          case MIN: {
+            cell.set_type(AttrType::CHARS);
+            std::string min = stat_[i].min();
+            char *c_min = (char *)malloc(min.size());
+            memcpy(c_min, min.c_str(), min.size());
+            cell.set_data(c_min);
+            return RC::SUCCESS;
+          } break;
+          case SUM: {
+            cell.set_type(AttrType::FLOATS);
+            float *sum = (float *)malloc(sizeof(float));
+            *sum = stat_[i].sum();
+            cell.set_data((char *)sum);
+            return RC::SUCCESS;
+          } break;
+          default: {
+            cell.set_type(AttrType::NULL_);
+            return RC::SUCCESS;
+          } break;
+        }
+      }
+    }
+    return RC::SUCCESS;
+  }
+
+  RC cell_at(int index, TupleCell &cell) const override {
+    // if (index >= values_.size()) {
+    //   return RC::INVALID_ARGUMENT;
+    // }
+    // // return find_cell(field, cell);
+    // cell.set_type(values_[index].type);
+    // cell.set_data((char *)values_[index].data);
+    return RC::INVALID_ARGUMENT;
+  }
+
+  RC find_cell(const Field &field, TupleCell &cell) const override {
+    return RC::INVALID_ARGUMENT;
+  }
+
+  RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
+  {
+    return RC::INVALID_ARGUMENT;
+  }
+
+private:
+  std::vector<Field> fields_;
+  std::vector<AggregateStat> stat_;
+};
+
+typedef struct TupleComparetor {
+  
+  bool operator() (Tuple *tuple1, Tuple *tuple2) {
+    for (size_t i=0; i<fields_.size(); i++) {
+      TupleCell cell1, cell2;
+      tuple1->find_cell(fields_[i], cell1);
+      tuple2->find_cell(fields_[i], cell2);
+      
+      size_t field_ptr = reinterpret_cast<size_t>(fields_[i].meta());
+      // 默认是升序
+      bool order = true;
+      auto iter = fields_order_.find(field_ptr);
+      if (iter != fields_order_.end()) {
+        order = fields_order_[field_ptr];
+      }
+      if (cell1.attr_type() == NULL_ && cell2.attr_type() != NULL_){
+        return order;
+      } else if (cell1.attr_type() != NULL_ && cell2.attr_type() == NULL_) {
+        return !order;
+      } else if (cell1.attr_type() == NULL_ && cell2.attr_type() == NULL_) {
+        continue;
+      } else {
+        int compare = cell1.compare(cell2);
+        if (compare == 0) {
+          continue;
+        } else {
+          if (order) {
+            return compare < 0;
+          } else {
+            return compare > 0;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  std::vector<Field> fields_;
+  std::unordered_map<size_t, bool> fields_order_;
+} TupleComparetor;

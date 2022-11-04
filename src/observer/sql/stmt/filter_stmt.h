@@ -130,6 +130,10 @@ public:
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
 			       const Condition &condition, FilterUnit *&filter_unit, FilterStmt *tmp_stmt);
 
+  static RC expresion_tree_generate(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+                          TreeExpr *&root_expr, Exp *exp, Table *&table, bool &is_multi_table,
+                          bool &is_agg, std::vector<RelAttr> *rel_attrs=nullptr, std::vector<Field> *query_fields=nullptr);
+
 private:
   std::unordered_map<std::string, std::vector<FilterUnit *>> single_filter_units_;
   std::vector<FilterUnit *> filter_units_; // 默认当前都是AND关系

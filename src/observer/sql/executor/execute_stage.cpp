@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include <sstream>
 #include <map>
 #include <unordered_map>
+#include <algorithm>
 
 #include "execute_stage.h"
 
@@ -243,43 +244,55 @@ void end_trx_if_need(Session *session, Trx *trx, bool all_right)
   }
 }
 
-void print_tuple_header(std::ostream &os, const ProjectOperator &oper, bool is_multi_table)
+void print_tuple_header(std::ostream &os, const ProjectOperator &oper, bool is_multi_table, 
+                        std::vector<TreeExpr *> &query_expr, std::vector<std::pair<int, int>> &fields_or_expr)
 {
-  const int cell_num = oper.tuple_cell_num();
+  // const int cell_num = oper.tuple_cell_num();
   const TupleCellSpec *cell_spec = nullptr;
-  for (int i = 0; i < cell_num; i++) {
-    oper.tuple_cell_spec_at(i, cell_spec);
+  for (size_t i=0; i < fields_or_expr.size(); i++) {
     if (i != 0) {
       os << " | ";
     }
-    if (is_multi_table && cell_spec->table_name()) {
-      os << cell_spec->table_name() << ".";
-    }
-    if (cell_spec->alias()) {
-      os << cell_spec->alias();
+    if (fields_or_expr[i].first == 0) {
+      oper.tuple_cell_spec_at(fields_or_expr[i].second, cell_spec);
+      if (is_multi_table && cell_spec->table_name()) {
+        os << cell_spec->table_name() << ".";
+      }
+      if (cell_spec->alias()) {
+        os << cell_spec->alias();
+      }
+    } else if (fields_or_expr[i].first == 1){
+      query_expr[fields_or_expr[i].second]->to_string(os, is_multi_table);
     }
   }
-
-  if (cell_num > 0) {
+  if (fields_or_expr.size() > 0) {
     os << '\n';
   }
 }
-void tuple_to_string(std::ostream &os, const Tuple &tuple)
+
+void tuple_to_string(std::ostream &os, const Tuple &tuple, std::vector<TreeExpr *> &query_expr, std::vector<std::pair<int, int>> &fields_or_expr)
 {
   TupleCell cell;
   RC rc = RC::SUCCESS;
   bool first_field = true;
-  for (int i = 0; i < tuple.cell_num(); i++) {
-    rc = tuple.cell_at(i, cell);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to fetch field of cell. index=%d, rc=%s", i, strrc(rc));
-      break;
-    }
 
+  for (size_t i=0; i < fields_or_expr.size(); i++) {
     if (!first_field) {
       os << " | ";
     } else {
       first_field = false;
+    }
+    if (fields_or_expr[i].first == 0) {
+      rc = tuple.cell_at(fields_or_expr[i].second, cell);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to fetch field of cell. index=%d, rc=%s", i, strrc(rc));
+        break;
+      }
+    } else if (fields_or_expr[i].first == 1){
+      rc = query_expr[fields_or_expr[i].second]->get_value(tuple, cell);
+      if (rc != RC::SUCCESS) {
+        break;
+      }
     }
     cell.to_string(os);
   }
@@ -310,6 +323,10 @@ IndexScanOperator *try_to_create_index_scan_operator(std::vector<FilterUnit *> &
       return nullptr;
     }
 
+    // 如果含有表达式先不使用索引，但其实可以修改一下，适配表达式？
+    if (left->type() == ExprType::TREE || right->type() == ExprType::TREE) {
+      return nullptr;
+    }
     if (left->type() == ExprType::FIELD && right->type() == ExprType::VALUE) {
     } else if (left->type() == ExprType::VALUE && right->type() == ExprType::FIELD) {
       std::swap(left, right);
@@ -557,7 +574,7 @@ RC do_sub_select(SubSelectStmt sub_select_stmt, FilterUnit *filter_unit,
   }
 
   for (const Field &field : select_stmt->query_fields()) {
-    project_oper->add_projection(field.table(), field.meta());
+    project_oper->add_projection(field.table(), &field);
   }
   
   Expression *expr = nullptr;
@@ -588,6 +605,15 @@ RC do_sub_select(SubSelectStmt sub_select_stmt, FilterUnit *filter_unit,
     }
 
     rc = agg_oper->open();
+    while ((rc = agg_oper->next()) == RC::SUCCESS) {
+    }
+
+    if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
+      return rc;
+    } else {
+      rc = agg_oper->close();
+    }
+
     Value res = agg_oper->get_result(select_stmt->query_fields()[0]);
     Expression *new_expr = new ValueExpr(res);
     if (sub_select_stmt.is_left_value) {
@@ -741,7 +767,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     }
   });
 
-  ProjectOperator project_oper;
+  ProjectOperator project_oper(select_stmt->group_fields());
   if (!cross_oper_list.empty()) {
     // 多表
     project_oper.add_child(cross_oper_list.back());
@@ -751,16 +777,118 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   }
   
   for (const Field &field : select_stmt->query_fields()) {
-    project_oper.add_projection(field.table(), field.meta());
+    project_oper.add_projection(field.table(), &field);
   }
   
+  if (!select_stmt->group_fields().empty()) {
+    rc = project_oper.open();
+    if (rc != RC::SUCCESS) {
+      session_event->set_response("FAILURE\n");
+      return rc;
+    }
+    while ((rc = project_oper.next()) == RC::SUCCESS) {
+    }
+    if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
+      LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
+      session_event->set_response("FAILURE\n");
+      return rc;
+    } else {
+      rc = project_oper.close();
+    }
+    auto group_fields = select_stmt->group_fields();
+    // 有多少组就有多少行，就有多少个AggregateStat
+    auto rel_attrs = select_stmt->rel_attrs();
+    auto query_fields = select_stmt->query_fields();
+    auto query_fields_with_agg = select_stmt->query_fields_with_agg();
+    auto fields_or_expr = select_stmt->fields_or_expr();
+    AggregateOperator agg_oper(rel_attrs, query_fields_with_agg);
+
+    std::stringstream ss;
+    for (size_t i=0; i<fields_or_expr.size(); i++) {
+      if (i != 0) {
+        ss << " | ";
+      }
+      if (fields_or_expr[i].first == 0) {
+        if (!cross_oper_list.empty()) {
+          ss << query_fields[fields_or_expr[i].second].table_name() << '.';
+        }
+        ss << query_fields[fields_or_expr[i].second].field_name();
+      } else if (fields_or_expr[i].first == -1) {
+        agg_oper.print_header_at(ss, fields_or_expr[i].second, !cross_oper_list.empty());
+      }
+    }
+    ss << std::endl;
+    for (auto group_tuple : project_oper.group_tuples()) {
+      agg_oper.reset();
+      std::vector<AggregateStat> stats(rel_attrs.size());
+      for (auto tuple: group_tuple.second) {
+        agg_oper.add_tuple(tuple.get());
+      }
+      if (select_stmt->has_having() && !agg_oper.do_prdicate(select_stmt->having())) {
+        continue;
+      }
+      for (size_t i=0; i<fields_or_expr.size(); i++) {
+        if (i != 0) {
+          ss << " | ";
+        }
+        if (fields_or_expr[i].first == 0) {
+          TupleCell cell;
+          group_tuple.second[0]->find_cell(query_fields[fields_or_expr[i].second], cell);
+          cell.to_string(ss);
+        } else if (fields_or_expr[i].first == -1) {
+          agg_oper.to_string_at(ss, fields_or_expr[i].second);
+        }
+      }
+      ss << std::endl;
+    }
+    session_event->set_response(ss.str());
+    return rc;
+  }
+
+
   if (select_stmt->is_agg()) {
     AggregateOperator agg_oper(select_stmt->rel_attrs(), select_stmt->query_fields());
     agg_oper.add_child(&project_oper);
     agg_oper.open();
+    while ((rc = agg_oper.next()) == RC::SUCCESS) {
+    }
+    if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
+      LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
+      session_event->set_response("FAILURE\n");
+      return rc;
+    } else {
+      rc = agg_oper.close();
+    }
     std::stringstream ss;
-    agg_oper.print_header(ss);
-    agg_oper.to_string(ss);
+    // 如果是聚合，那么
+    auto fields_or_expr = select_stmt->fields_or_expr();
+    auto query_expr = select_stmt->query_expr();
+    for (size_t i = 0; i < fields_or_expr.size(); i++) {
+        if (i != 0) {
+          ss << " | ";
+        }
+        if (fields_or_expr[i].first == 0) {
+          agg_oper.print_header_at(ss, fields_or_expr[i].second);
+        } else if (fields_or_expr[i].first == 1){
+          query_expr[fields_or_expr[i].second]->to_string(ss, false);
+        }
+    }
+    ss << std::endl;
+    auto tuple = agg_oper.get_result_tuple();
+    for (size_t i=0; i<fields_or_expr.size(); i++) {
+      if (i != 0) {
+        ss << " | ";
+      }
+      if (fields_or_expr[i].first == 0) {
+        agg_oper.to_string_at(ss, fields_or_expr[i].second);
+      } else if (fields_or_expr[i].first == 1) {
+        TupleCell cell;
+        query_expr[fields_or_expr[i].second]->get_value(tuple, cell);
+        cell.to_string(ss);
+      }
+
+    }
+    // agg_oper.to_string(ss);
     ss << std::endl;
     if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
       LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
@@ -780,27 +908,83 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   }
 
   std::stringstream ss;
-  print_tuple_header(ss, project_oper, select_stmt->tables().size() > 1);
-  while ((rc = project_oper.next()) == RC::SUCCESS) {
-    // get current record
-    // write to response
-    Tuple *tuple = project_oper.current_tuple();
-    if (nullptr == tuple) {
-      rc = RC::INTERNAL;
-      LOG_WARN("failed to get current record. rc=%s", strrc(rc));
-      break;
+  print_tuple_header(ss, project_oper, select_stmt->tables().size() > 1, select_stmt->query_expr(), select_stmt->fields_or_expr());
+  if (select_stmt->has_order()) {
+    while ((rc = project_oper.next()) == RC::SUCCESS) {
+
     }
-
-    tuple_to_string(ss, *tuple);
-    ss << std::endl;
-  }
-
-  if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
-    LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
-    session_event->set_response("FAILURE\n");
-    return rc;
+    if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
+      LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
+      session_event->set_response("FAILURE\n");
+      return rc;
+    } else {
+      rc = project_oper.close();
+    }
+    Operator *child_oper = project_oper.get_child();
+    if (child_oper->type() == OperatorType::CROSS_PRODUCT) {
+      auto cross_oper = static_cast<CrossProductOperator *>(child_oper);
+      auto tuple_set = cross_oper->tuple_set();
+      std::sort(tuple_set.begin(), tuple_set.end(), [&](CompositeTuple &tuple1, CompositeTuple &tuple2) {
+        TupleComparetor comparetor = select_stmt->comparetor();
+        return comparetor(&tuple1, &tuple2);
+      });
+      for (size_t i = 0; i < tuple_set.size(); i++) {
+        bool first = true;
+        for (const Field &field : select_stmt->query_fields()) {
+          TupleCell cell;
+          tuple_set[i].find_cell(field, cell);
+          if (!first) {
+            ss << " | ";
+          } else {
+            first = false;
+          }
+          cell.to_string(ss);
+        }
+        ss << std::endl;
+      }
+    } else if (child_oper->type() == OperatorType::PREDICATE){
+      auto pred_oper = static_cast<PredicateOperator *>(child_oper);
+      auto tuple_set = pred_oper->tuple_set();
+      std::sort(tuple_set.begin(), tuple_set.end(), [&](RowTuple &tuple1, RowTuple &tuple2) {
+        TupleComparetor comparetor = select_stmt->comparetor();
+        return comparetor(&tuple1, &tuple2);
+      });
+      for (size_t i = 0; i < tuple_set.size(); i++) {
+        bool first = true;
+        for (const Field &field : select_stmt->query_fields()) {
+          TupleCell cell;
+          tuple_set[i].find_cell(field, cell);
+          if (!first) {
+            ss << " | ";
+          } else {
+            first = false;
+          }
+          cell.to_string(ss);
+        }
+        ss << std::endl;
+      }
+    }
   } else {
-    rc = project_oper.close();
+    while ((rc = project_oper.next()) == RC::SUCCESS) {
+      // get current record
+      // write to response
+      Tuple *tuple = project_oper.current_tuple();
+      if (nullptr == tuple) {
+        rc = RC::INTERNAL;
+        LOG_WARN("failed to get current record. rc=%s", strrc(rc));
+        break;
+      }
+
+      tuple_to_string(ss, *tuple, select_stmt->query_expr(), select_stmt->fields_or_expr());
+      ss << std::endl;
+    }
+    if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
+      LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
+      session_event->set_response("FAILURE\n");
+      return rc;
+    } else {
+      rc = project_oper.close();
+    }
   }
   session_event->set_response(ss.str());
   return rc;

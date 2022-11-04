@@ -14,10 +14,12 @@ See the Mulan PSL v2 for more details. */
 
 #include <string.h>
 #include <cmath>
+#include <stack>
 
 #include "rc.h"
 #include "util/util.h"
 #include "common/log/log.h"
+
 
 std::string double2string(double v)
 {

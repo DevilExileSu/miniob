@@ -17,11 +17,55 @@ See the Mulan PSL v2 for more details. */
 
 RC FieldExpr::get_value(const Tuple &tuple, TupleCell &cell) const
 {
+  if (tuple.type() == TupleType::CUSTOMIZE) {
+    CustomizeTuple *c_tuple = (CustomizeTuple *)(&tuple); 
+    return c_tuple->find_cell(field_, cell, agg_func_);
+  }
   return tuple.find_cell(field_, cell);
 }
 
 RC ValueExpr::get_value(const Tuple &tuple, TupleCell &cell) const
 {
   cell = tuple_cell_;
+  return RC::SUCCESS;
+}
+
+
+RC TreeExpr::get_value(const Tuple &tuple, TupleCell &cell) const 
+{
+  // 获取左右两边的TupleCell
+  TupleCell left_cell;
+  TupleCell right_cell;
+  // 因为SUB exp的情况，左子节点可能为空
+  if (left_ != nullptr) {
+    left_->get_value(tuple, left_cell);
+  }
+  right_->get_value(tuple, right_cell);
+
+  // 重载TupleCell的运算符
+  switch (expr_type_)
+  {
+  case ADD: {
+    cell = left_cell + right_cell;
+  } break;
+  case SUB: {
+    if (left_ != nullptr) {
+      cell = left_cell - right_cell;
+    } else {
+      int zero = 0;
+      TupleCell zero_cell(FLOATS, (char *)&zero);
+      cell = zero_cell - right_cell;
+    }
+  } break;
+  case MUL: {
+    cell = left_cell * right_cell;
+  } break;
+  case DIV: {
+    cell = left_cell / right_cell;
+  } break;
+  default: {
+    cell = left_cell;
+  } break;
+  }
   return RC::SUCCESS;
 }

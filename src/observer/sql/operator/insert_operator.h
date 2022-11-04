@@ -37,6 +37,9 @@ public:
     value_init_null(&res);
     return res;
   }
+  OperatorType type() override {
+    return OperatorType::OTHER;
+  }
 private:
   InsertStmt *insert_stmt_ = nullptr;
 };

@@ -48,7 +48,7 @@ void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_
   } else {
     relation_attr->alias = nullptr;
   }
-  relation_attr->attribute_name = strdup(attribute_name);
+  relation_attr->attribute_name =  strdup(attribute_name);
   relation_attr->agg_func = AggFunc::NONE;
   relation_attr->is_num = 0;
 }
@@ -56,27 +56,43 @@ void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_
 
 void relation_attr_destroy(RelAttr *relation_attr)
 {
-  free(relation_attr->relation_name);
-  free(relation_attr->attribute_name);
-  free(relation_attr->alias);
+  if (relation_attr->relation_name != nullptr) {
+    free(relation_attr->relation_name);
+  } 
+  if (relation_attr->attribute_name != nullptr) {
+    free(relation_attr->attribute_name);
+  }
+  if (relation_attr->alias != nullptr) {
+    free(relation_attr->alias);
+  }
   relation_attr->relation_name = nullptr;
   relation_attr->attribute_name = nullptr;
   relation_attr->alias = nullptr;
 }
 
 void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name,
-                                  const char *attribute_name, AggFunc agg) 
+                                  const char *attribute_name, AggFunc agg, const char *alias_name) 
 {
   if (relation_name != nullptr) {
     relation_attr->relation_name = strdup(relation_name);
   } else {
     relation_attr->relation_name = nullptr;
   }
+  if (alias_name != nullptr) {
+    relation_attr->alias = strdup(alias_name);
+  } else {
+    relation_attr->alias = nullptr;
+  }
   relation_attr->attribute_name = strdup(attribute_name);
   relation_attr->agg_func = agg;
   relation_attr->is_num = 0;
 }
-void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num) {
+void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num, const char *alias_name) {
+  if (alias_name != nullptr) {
+    relation_attr->alias = strdup(alias_name);
+  } else {
+    relation_attr->alias = nullptr;
+  }
   relation_attr->relation_name = nullptr;
   relation_attr->attribute_name = nullptr;
   relation_attr->agg_func = agg;
@@ -146,6 +162,9 @@ int value_init_date(Value *value, const char *v) {
 
 void value_destroy(Value *value)
 {
+  if (value->type == UNDEFINED && value->data == nullptr) {
+    return;
+  }
   value->type = UNDEFINED;
   free(value->data);
   value->data = nullptr;
@@ -178,6 +197,44 @@ void value_init_set(Value *value, Value values[], int begin, int set_size) {
   value->set_size = set_size;
 }
 
+void order_by_init(OrderBy *order_by, RelAttr *relation, int order) {
+   // 0是asc，1是desc
+   order_by->order = order;
+   order_by->attr = *relation;
+}
+
+
+void order_by_destroy(OrderBy *order_by) {
+  order_by->order = 0;
+}
+
+void switch_comp_op(CompOp *comp) {
+    switch (*comp) {
+    case EQUAL_TO:    { *comp = EQUAL_TO; }    break;
+    case LESS_EQUAL:  { *comp = GREAT_EQUAL; }  break;
+    case NOT_EQUAL:   { *comp = NOT_EQUAL; }   break;
+    case LESS_THAN:   { *comp = GREAT_THAN; } break;
+    case GREAT_EQUAL: { *comp = LESS_EQUAL; }   break;
+    case GREAT_THAN:  { *comp = LESS_THAN; }  break;
+    default: break;
+    }
+}
+
+
+void having_init(Having *having, RelAttr *attr, Value *value, CompOp comp, int swap) {
+  having->attr = *attr;
+  having->value = *value;
+  if (swap == 1) {
+    switch_comp_op(&comp);
+  }
+  having->comp = comp;
+}
+
+void having_destroy(Having *having) {
+  relation_attr_destroy(&having->attr);
+  value_destroy(&having->value);
+}
+
 void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
     int right_is_attr, RelAttr *right_attr, Value *right_value)
 {
@@ -195,21 +252,115 @@ void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr
   } else {
     condition->right_value = *right_value;
   }
+  condition->left_expr = nullptr;
+  condition->right_expr = nullptr;
 }
 void condition_destroy(Condition *condition)
 {
-  if (condition->left_is_attr) {
+  if (condition->left_is_attr == 1) {
     relation_attr_destroy(&condition->left_attr);
-  } else {
+  } else if (condition->left_is_attr == 0){
     value_destroy(&condition->left_value);
   }
-  if (condition->right_is_attr) {
+  if (condition->right_is_attr == 1) {
     relation_attr_destroy(&condition->right_attr);
-  } else {
+  } else if (condition->right_is_attr == 0){
     value_destroy(&condition->right_value);
+  }
+  if (condition->left_is_attr == -1 && condition->left_expr != nullptr) {
+    expression_destroy(condition->left_expr);
+  }
+  if (condition->right_is_attr == -1 && condition->right_expr != nullptr) {
+    expression_destroy(condition->right_expr);
   }
 }
 
+void condition_init_with_exp(Condition *condition, CompOp comp, Exp *left_expr, Exp *right_expr) {
+  condition->comp = comp;
+
+  // 如果表达式为叶子节点，即Value或RelAttr
+  if (left_expr->expr_type == NodeType::VAL) {
+    condition->left_value = *left_expr->value;
+    condition->left_is_attr = 0;
+  } else if (left_expr->expr_type == NodeType::ATTR) {
+    condition->left_attr = *left_expr->attr; 
+    condition->left_is_attr = 1;
+  } else {
+    condition->left_expr = left_expr;
+    condition->left_is_attr = -1;
+  }
+
+  if (right_expr->expr_type == NodeType::VAL) {
+    condition->right_value = *right_expr->value;
+    condition->right_is_attr = 0;
+  } else if (right_expr->expr_type == NodeType::ATTR) {
+    condition->right_attr = *right_expr->attr;
+    condition->right_is_attr = 1;
+  } else {
+    condition->right_expr = right_expr;
+    condition->right_is_attr = -1;
+  }
+}
+
+Exp *create_expression(Exp *left_expr, Exp *right_expr, Value *value, RelAttr *relation_attr, NodeType node_type) {
+  Exp *exp = (Exp *)malloc(sizeof(Exp));
+  exp->expr_type = node_type;
+
+
+  if (value != nullptr) {
+    exp->value = (Value *)malloc(sizeof(Value));
+    *exp->value = *value;
+  } else {
+    exp->value = nullptr;
+  }
+  if (relation_attr != nullptr) {
+    exp->attr = (RelAttr *)malloc(sizeof(RelAttr));
+    *exp->attr = *relation_attr;
+  } else {
+    exp->attr = nullptr;
+  }
+  
+  if (right_expr != nullptr) {
+    exp->right_expr = right_expr;
+  } else {
+    exp->right_expr = nullptr;
+  }
+
+  if (left_expr != nullptr) {
+    exp->left_expr = left_expr;
+  } else {
+    exp->left_expr = nullptr;
+  }
+  exp->lbrace = 0;
+  exp->rbrace = 0; 
+  return exp;
+}
+
+// 在条件语句中出现的attribute_name，但是select中没有出现
+// 可能导致内存没有回收，value也是一样
+void expression_destroy(Exp *exp)
+{
+  if (exp->expr_type == NO_EXP) {
+    return;
+  }
+  
+  if (exp->expr_type == VAL) {
+    value_destroy(exp->value);
+    exp->left_expr = nullptr;
+    exp->right_expr = nullptr;
+    return;
+  }
+  exp->expr_type = NO_EXP;
+  if (exp->left_expr != nullptr) {
+    expression_destroy(exp->left_expr);
+    exp->left_expr = nullptr;
+  }
+
+  if (exp->right_expr != nullptr) {
+    expression_destroy(exp->right_expr);
+    exp->right_expr = nullptr;
+  }
+}
 void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length, int nullable)
 {
   attr_info->name = strdup(name);
@@ -219,7 +370,9 @@ void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t
 }
 void attr_info_destroy(AttrInfo *attr_info)
 {
-  free(attr_info->name);
+  if (attr_info->name != nullptr) {
+    free(attr_info->name);
+  }
   attr_info->name = nullptr;
 }
 
@@ -241,6 +394,17 @@ void selects_append_relation_with_alias(Selects *selects, const char *relation_n
     selects->alias[selects->relation_num] = nullptr; 
   }
   selects->relations[selects->relation_num++] = strdup(relation_name);
+}
+
+
+// 主要是针对聚合函数的表达式计算
+// 不考虑别名
+void selects_append_expressions(Selects *selects, Exp *expression[], size_t begin, size_t expr_num) {
+  assert(expr_num <= sizeof(selects->exp) / sizeof(expression[0]));
+  for (size_t i=0; i < expr_num; i++ ){
+    selects->exp[i] = expression[i+begin];
+  }
+  selects->expr_num = expr_num;
 }
 
 void selects_append_attribute_list(Selects *selects, RelAttr attr_list[], size_t begin, size_t attr_num) {
@@ -266,6 +430,21 @@ void selects_append_conditions(Selects *selects, Condition conditions[], size_t 
   selects->condition_num = condition_num;
 }
 
+void selects_append_order_by(Selects *selects, OrderBy *order_by) {
+  selects->order_bys[selects->order_num++] = *order_by;
+}
+
+
+void selects_append_group_by(Selects *selects, RelAttr *attr) {
+  selects->group_bys[selects->group_num++] = *attr;
+}
+
+
+void selects_append_having(Selects *selects, Having *having) {
+  selects->having = *having;
+  selects->has_having = 1;
+}
+
 void selects_destroy(Selects *selects)
 {
   for (size_t i = 0; i < selects->attr_num; i++) {
@@ -283,7 +462,21 @@ void selects_destroy(Selects *selects)
   for (size_t i = 0; i < selects->condition_num; i++) {
     condition_destroy(&selects->conditions[i]);
   }
+  selects->expr_num = 0;
+
+  for (size_t i=0; i<selects->expr_num; i++) {
+    expression_destroy(selects->exp[i]);
+  }
   selects->condition_num = 0;
+
+  for (size_t i=0; i<selects->order_num; i++) {
+    order_by_destroy(&selects->order_bys[i]);
+  }
+  selects->order_num = 0;
+  for (size_t i=0; i<selects->group_num; i++) {
+    relation_attr_destroy(&selects->group_bys[i]);
+  }
+  selects->group_num = 0;
 }
 
 void insert_init(Insert *insert, Value values[], size_t value_num) {

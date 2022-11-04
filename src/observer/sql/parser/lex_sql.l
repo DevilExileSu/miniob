@@ -35,12 +35,15 @@ QUOTE            [\'\"]
 {WHITE_SAPCE}                                        // ignore whitespace
 \n                                                   ;
 
-[\-]?{DIGIT}+                                        yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);
-[\-]?{DIGIT}+{DOT}{DIGIT}+                           yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
+{DIGIT}+                                        yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);
+{DIGIT}+{DOT}{DIGIT}+                           yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
 
 ";"                                                  RETURN_TOKEN(SEMICOLON);
 {DOT}                                                RETURN_TOKEN(DOT);
 "*"                                                  RETURN_TOKEN(STAR);
+"+"                                                  RETURN_TOKEN(ADD_T);
+"-"                                                  RETURN_TOKEN(SUB_T);
+"/"                                                  RETURN_TOKEN(DIV_T);
 [Ee][Xx][Ii][Tt]                                     RETURN_TOKEN(EXIT);
 [Hh][Ee][Ll][Pp]                                     RETURN_TOKEN(HELP);
 [Dd][Ee][Ss][Cc]                                     RETURN_TOKEN(DESC);
@@ -90,6 +93,11 @@ QUOTE            [\'\"]
 [Cc][Oo][Uu][Nn][Tt]                                 RETURN_TOKEN(COUNT_T);
 [Aa][Vv][Gg]                                         RETURN_TOKEN(AVG_T);
 [Ss][Uu][Mm]                                         RETURN_TOKEN(SUM_T);
+[Oo][Rr][Dd][Ee][Rr]                                 RETURN_TOKEN(ORDER);
+[Aa][Ss][Cc]                                         RETURN_TOKEN(ASC);
+[Gg][Rr][Oo][Uu][Pp]                                 RETURN_TOKEN(GROUP);
+[Bb][Yy]                                             RETURN_TOKEN(BY);
+[Hh][Aa][Vv][Ii][Nn][Gg]                             RETURN_TOKEN(HAVING);
 {ID}                                                 yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                                  RETURN_TOKEN(LBRACE);
 ")"                                                  RETURN_TOKEN(RBRACE);
