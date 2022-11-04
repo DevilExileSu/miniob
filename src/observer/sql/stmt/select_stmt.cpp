@@ -626,8 +626,14 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     } else {
       table = default_table;
     }
-    const FieldMeta *field_meta = table->table_meta().field(attr->attribute_name);
-    Field field(table, field_meta);
+    Field field;
+    if (0 == strcmp(attr->attribute_name, "*")) {
+      field = query_fields_with_agg.back();
+    } else {
+      const FieldMeta *field_meta = table->table_meta().field(attr->attribute_name);
+      field.set_table(table);
+      field.set_field(field_meta);
+    }
     
     select_stmt->having_.agg_func = attr->agg_func;
     select_stmt->having_.comp = select_sql.having.comp;
