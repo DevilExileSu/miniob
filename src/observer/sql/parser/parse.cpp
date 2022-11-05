@@ -72,6 +72,7 @@ void relation_attr_init_with_func(
   relation_attr->func = func;
   relation_attr->is_num = 0;
   relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
   if (alias != nullptr) {
     relation_attr->alias = strdup(alias);
   } else {
@@ -348,23 +349,35 @@ void condition_init_with_exp(Condition *condition, CompOp comp, Exp *left_expr, 
   if (left_expr->expr_type == NodeType::VAL) {
     condition->left_value = *left_expr->value;
     condition->left_is_attr = 0;
+    condition->left_attr.is_value = 0;
+    condition->left_attr.is_has_second_value = 0;
+    condition->left_attr.func = NONE_;
   } else if (left_expr->expr_type == NodeType::ATTR) {
     condition->left_attr = *left_expr->attr; 
     condition->left_is_attr = 1;
   } else {
     condition->left_expr = left_expr;
     condition->left_is_attr = -1;
+    condition->left_attr.is_value = 0;
+    condition->left_attr.is_has_second_value = 0;
+    condition->left_attr.func = NONE_;
   }
 
   if (right_expr->expr_type == NodeType::VAL) {
     condition->right_value = *right_expr->value;
     condition->right_is_attr = 0;
+    condition->right_attr.is_value = 0;
+    condition->right_attr.is_has_second_value = 0;
+    condition->right_attr.func = NONE_;
   } else if (right_expr->expr_type == NodeType::ATTR) {
     condition->right_attr = *right_expr->attr;
     condition->right_is_attr = 1;
   } else {
     condition->right_expr = right_expr;
     condition->right_is_attr = -1;
+    condition->right_attr.is_value = 0;
+    condition->right_attr.is_has_second_value = 0;
+    condition->right_attr.func = NONE_;
   }
 }
 
