@@ -344,6 +344,7 @@ char *M(int month)
 char *D(int day)
 {
   char *result = (char *)malloc(10);
+  sprintf(result, "%d", day);
   if (day % 10 == 1 && day != 11) {
     strcat(result, "st");
   } else if (day % 10 == 2 && day != 12) {
