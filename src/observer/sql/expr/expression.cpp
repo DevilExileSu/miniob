@@ -30,9 +30,11 @@ RC FieldExpr::get_value(const Tuple &tuple, TupleCell &cell) const
     if (tmp_cell.attr_type() != CHARS) {
       return RC::INVALID_ARGUMENT;
     }
-    cell.set_type(CHARS);
-    const char *len = int2string(strlen(tmp_cell.data())).c_str();
-    cell.set_data(len);
+    cell.set_type(INTS);
+    int len = strlen(tmp_cell.data());
+    Value value;
+    value_init_integer(&value, len);
+    cell.set_data((char *)value.data);
     return RC::SUCCESS;
     // cell.set_length(strlen(len));
   } else if (func_ != NONE_ && func_ != LENGTH) {

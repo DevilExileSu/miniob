@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <string.h>
 #include "storage/common/field.h"
+#include "sql/parser/parse_defs.h"
 #include "sql/expr/tuple_cell.h"
 #include "util/util.h"
 

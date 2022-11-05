@@ -146,6 +146,9 @@ void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_na
   relation_attr->attribute_name = strdup(attribute_name);
   relation_attr->agg_func = agg;
   relation_attr->is_num = 0;
+  relation_attr->func = NONE_;
+  relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
 }
 void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num, const char *alias_name) {
   if (alias_name != nullptr) {
@@ -158,6 +161,9 @@ void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int nu
   relation_attr->agg_func = agg;
   relation_attr->is_num = 1;
   relation_attr->num = num;
+  relation_attr->func = NONE_;
+  relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
 }
 
 static int8_t day_month[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30 ,31, 30, 31};
