@@ -65,7 +65,7 @@ public:
       const Condition conditions[], int *updated_count);
   RC update_record(Trx *trx, Record *record, std::vector<const FieldMeta *> field_metas, std::vector<const Value *> values);
   RC update_record(Trx *trx, Record *record, const FieldMeta *field_meta, const Value *value);
-
+  RC recover_update_record(Record *record);
   RC delete_record(Trx *trx, ConditionFilter *filter, int *deleted_count);
   RC delete_record(Trx *trx, Record *record);
   RC recover_delete_record(Record *record);
@@ -99,8 +99,10 @@ public:
 public:
   RC commit_insert(Trx *trx, const RID &rid);
   RC commit_delete(Trx *trx, const RID &rid);
+  RC commit_update(Trx *trx, const RID &rid);
   RC rollback_insert(Trx *trx, const RID &rid);
   RC rollback_delete(Trx *trx, const RID &rid);
+  RC rollback_update(Trx *trx, const RID &rid);
 
 private:
   RC scan_record(

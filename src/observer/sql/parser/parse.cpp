@@ -32,7 +32,10 @@ void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const
   relation_attr->alias = nullptr;
   relation_attr->attribute_name = strdup(attribute_name);
   relation_attr->agg_func = AggFunc::NONE;
+  relation_attr->func = NONE_;
   relation_attr->is_num = 0;
+  relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
 }
 
 
@@ -50,9 +53,57 @@ void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_
   }
   relation_attr->attribute_name =  strdup(attribute_name);
   relation_attr->agg_func = AggFunc::NONE;
+  relation_attr->func = NONE_;
   relation_attr->is_num = 0;
+  relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
 }
 
+
+void relation_attr_init_with_func(
+    RelAttr *relation_attr, const char *relation_name, const char *attribute_name, Func func, const char *alias)
+{
+  if (relation_name != nullptr) {
+    relation_attr->relation_name = strdup(relation_name);
+  } else {
+    relation_attr->relation_name = nullptr;
+  }
+  relation_attr->attribute_name = strdup(attribute_name);
+  relation_attr->func = func;
+  relation_attr->is_num = 0;
+  relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
+  if (alias != nullptr) {
+    relation_attr->alias = strdup(alias);
+  } else {
+    relation_attr->alias = nullptr;
+  }
+}
+
+void relation_attr_init_with_func_value(RelAttr *relation_attr, Func func, Value *value, Value *second_value, const char *alias) {
+  relation_attr->relation_name = nullptr;
+  relation_attr->attribute_name = nullptr;
+  relation_attr->func = func;
+  relation_attr->is_num = 0;
+  relation_attr->is_value = 1;
+  relation_attr->value = *value;
+  if (second_value != nullptr) {
+    relation_attr->second_value = *second_value;
+    relation_attr->is_has_second_value = 1;
+  } else {
+    relation_attr->is_has_second_value = 0;
+  }
+  if (alias != nullptr) {
+    relation_attr->alias = strdup(alias);
+  } else {
+    relation_attr->alias = nullptr;
+  }
+}
+
+void relation_attr_init_with_func_append_value(RelAttr *relation_attr, Value *value) {
+  relation_attr->is_has_second_value = 1;
+  relation_attr->second_value = *value; 
+}
 
 void relation_attr_destroy(RelAttr *relation_attr)
 {
@@ -65,9 +116,19 @@ void relation_attr_destroy(RelAttr *relation_attr)
   if (relation_attr->alias != nullptr) {
     free(relation_attr->alias);
   }
+  if (relation_attr->is_value) {
+    value_destroy(&relation_attr->value);
+  } 
+  if (relation_attr->is_has_second_value) {
+    value_destroy(&relation_attr->second_value);
+  }
   relation_attr->relation_name = nullptr;
   relation_attr->attribute_name = nullptr;
   relation_attr->alias = nullptr;
+  relation_attr->func = NONE_;
+  relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
+  relation_attr->is_num = 0;
 }
 
 void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name,
@@ -86,6 +147,9 @@ void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_na
   relation_attr->attribute_name = strdup(attribute_name);
   relation_attr->agg_func = agg;
   relation_attr->is_num = 0;
+  relation_attr->func = NONE_;
+  relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
 }
 void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num, const char *alias_name) {
   if (alias_name != nullptr) {
@@ -98,6 +162,9 @@ void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int nu
   relation_attr->agg_func = agg;
   relation_attr->is_num = 1;
   relation_attr->num = num;
+  relation_attr->func = NONE_;
+  relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
 }
 
 static int8_t day_month[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30 ,31, 30, 31};
@@ -282,23 +349,35 @@ void condition_init_with_exp(Condition *condition, CompOp comp, Exp *left_expr, 
   if (left_expr->expr_type == NodeType::VAL) {
     condition->left_value = *left_expr->value;
     condition->left_is_attr = 0;
+    condition->left_attr.is_value = 0;
+    condition->left_attr.is_has_second_value = 0;
+    condition->left_attr.func = NONE_;
   } else if (left_expr->expr_type == NodeType::ATTR) {
     condition->left_attr = *left_expr->attr; 
     condition->left_is_attr = 1;
   } else {
     condition->left_expr = left_expr;
     condition->left_is_attr = -1;
+    condition->left_attr.is_value = 0;
+    condition->left_attr.is_has_second_value = 0;
+    condition->left_attr.func = NONE_;
   }
 
   if (right_expr->expr_type == NodeType::VAL) {
     condition->right_value = *right_expr->value;
     condition->right_is_attr = 0;
+    condition->right_attr.is_value = 0;
+    condition->right_attr.is_has_second_value = 0;
+    condition->right_attr.func = NONE_;
   } else if (right_expr->expr_type == NodeType::ATTR) {
     condition->right_attr = *right_expr->attr;
     condition->right_is_attr = 1;
   } else {
     condition->right_expr = right_expr;
     condition->right_is_attr = -1;
+    condition->right_attr.is_value = 0;
+    condition->right_attr.is_has_second_value = 0;
+    condition->right_attr.func = NONE_;
   }
 }
 

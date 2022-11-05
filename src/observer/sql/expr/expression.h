@@ -16,7 +16,9 @@ See the Mulan PSL v2 for more details. */
 
 #include <string.h>
 #include "storage/common/field.h"
+#include "sql/parser/parse_defs.h"
 #include "sql/expr/tuple_cell.h"
+#include "util/util.h"
 
 class Tuple;
 
@@ -78,11 +80,24 @@ public:
   const AggFunc agg_func() const {
     return agg_func_;
   }
-
+  
+  const Func func() const {
+    return func_;
+  }
+  
+  void set_func(Func func) {
+    func_ = func;
+  }
+  void set_acc(int acc) {
+    acc_ = acc;
+  }
+  
   RC get_value(const Tuple &tuple, TupleCell &cell) const override;
 private:
   Field field_;
   AggFunc agg_func_ = AggFunc::NONE;
+  Func func_ = Func::NONE_;
+  int acc_ = 0;
 };
 
 class ValueExpr : public Expression

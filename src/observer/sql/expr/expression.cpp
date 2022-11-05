@@ -21,6 +21,41 @@ RC FieldExpr::get_value(const Tuple &tuple, TupleCell &cell) const
     CustomizeTuple *c_tuple = (CustomizeTuple *)(&tuple); 
     return c_tuple->find_cell(field_, cell, agg_func_);
   }
+  if (func_ != NONE_ && func_ == LENGTH) {
+    TupleCell tmp_cell;
+    RC rc = tuple.find_cell(field_, tmp_cell);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    if (tmp_cell.attr_type() != CHARS) {
+      return RC::INVALID_ARGUMENT;
+    }
+    cell.set_type(INTS);
+    int len = strlen(tmp_cell.data());
+    Value value;
+    value_init_integer(&value, len);
+    cell.set_data((char *)value.data);
+    return RC::SUCCESS;
+    // cell.set_length(strlen(len));
+  } else if (func_ != NONE_ && func_ == ROUND) {
+    TupleCell tmp_cell;
+    RC rc = tuple.find_cell(field_, tmp_cell);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    if (tmp_cell.attr_type() != FLOATS) {
+      return RC::INVALID_ARGUMENT;
+    }
+    cell.set_type(FLOATS);
+    Value value;
+    float data = *(float *)tmp_cell.data();
+    data = round_(data, acc_);
+    value_init_float(&value, data);
+    cell.set_data((char *)value.data);
+    return RC::SUCCESS;
+  } else if (func_ != NONE_) {
+    return RC::INVALID_ARGUMENT;
+  }
   return tuple.find_cell(field_, cell);
 }
 

@@ -248,7 +248,12 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       LOG_WARN("cannot find attr");
       return rc;
     }
-    left = new FieldExpr(left_table, field);
+    FieldExpr *field_expr = new FieldExpr(left_table, field);
+    field_expr->set_func(condition.left_attr.func);
+    if (condition.left_attr.is_has_second_value) {
+      field_expr->set_acc(*(int *)condition.left_attr.second_value.data);
+    }
+    left = field_expr;
     condition_field = const_cast<FieldMeta *>(field);
   } else if (condition.left_is_attr == 0){
     left_condition_value = const_cast<Value *>(&condition.left_value);
@@ -272,7 +277,12 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       delete left;
       return rc;
     }
-    right = new FieldExpr(right_table, field);
+    FieldExpr *field_expr = new FieldExpr(right_table, field);
+    field_expr->set_func(condition.right_attr.func);
+    if (condition.right_attr.is_has_second_value) {
+      field_expr->set_acc(*(int *)condition.right_attr.second_value.data);
+    }
+    right = field_expr;
     condition_field = const_cast<FieldMeta *>(field);
   } else if (condition.right_is_attr == 0) {
     right_condition_value = const_cast<Value *>(&condition.right_value);

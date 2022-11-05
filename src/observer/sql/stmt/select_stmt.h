@@ -59,6 +59,8 @@ public:
   std::vector<Field> &query_fields() { return query_fields_; }
   std::vector<Field> &group_fields() { return group_fields_; }
   std::vector<Field> &query_fields_with_agg() { return query_fields_with_agg_; }
+  std::vector<Field> &query_func_fields() { return query_func_fields_; }
+  std::vector<RelAttr> &func_attrs() { return func_attrs_; }
   std::vector<RelAttr> &rel_attrs() { return rel_attrs_; }
   // const std::vector<SelectStmt *> &sub_select_stmts() const { return select_stmts_; }
   const std::vector<SubSelectStmt> &sub_select_stmts() const { return sub_select_stmts_; }
@@ -75,6 +77,8 @@ public:
     return tuple_comparetor_;
   }
   bool has_order() { return !tuple_comparetor_.fields_order_.empty(); }
+  bool is_func() { return is_func_; }
+
 
 private:
   std::vector<Field> query_fields_;
@@ -94,6 +98,10 @@ private:
   // groupby处理
   std::vector<Field> group_fields_;
   HavingCondition having_;
+  // function处理
+  std::vector<Field> query_func_fields_;
+  std::vector<RelAttr> func_attrs_;
   bool has_having_ = false;
   bool is_and_ = true;
+  bool is_func_ = false;
 };
