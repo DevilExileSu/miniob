@@ -32,7 +32,10 @@ void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const
   relation_attr->alias = nullptr;
   relation_attr->attribute_name = strdup(attribute_name);
   relation_attr->agg_func = AggFunc::NONE;
+  relation_attr->func = NONE_;
   relation_attr->is_num = 0;
+  relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
 }
 
 
@@ -50,7 +53,10 @@ void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_
   }
   relation_attr->attribute_name =  strdup(attribute_name);
   relation_attr->agg_func = AggFunc::NONE;
+  relation_attr->func = NONE_;
   relation_attr->is_num = 0;
+  relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
 }
 
 
@@ -109,9 +115,19 @@ void relation_attr_destroy(RelAttr *relation_attr)
   if (relation_attr->alias != nullptr) {
     free(relation_attr->alias);
   }
+  if (relation_attr->is_value) {
+    value_destroy(&relation_attr->value);
+  } 
+  if (relation_attr->is_has_second_value) {
+    value_destroy(&relation_attr->second_value);
+  }
   relation_attr->relation_name = nullptr;
   relation_attr->attribute_name = nullptr;
   relation_attr->alias = nullptr;
+  relation_attr->func = NONE_;
+  relation_attr->is_value = 0;
+  relation_attr->is_has_second_value = 0;
+  relation_attr->is_num = 0;
 }
 
 void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name,
