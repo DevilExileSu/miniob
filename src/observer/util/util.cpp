@@ -15,6 +15,9 @@ See the Mulan PSL v2 for more details. */
 #include <string.h>
 #include <cmath>
 #include <stack>
+#include <iostream>
+#include <sstream>
+#include <iomanip>
 
 #include "rc.h"
 #include "util/util.h"
@@ -285,10 +288,12 @@ void value_to_string(std::ostream &os, Value *value)
   }
 }
 
-float round_(float v, int accuracy)
+double round_(double v, int accuracy)
 {
-  double p = pow(10, accuracy);
-  return round(v * p) / p;
+  std::stringstream ss;
+  ss << std::fixed << std::setprecision(accuracy) << (v + 1e-4);
+  ss >> v;
+  return v;
 }
 
 

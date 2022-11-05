@@ -714,7 +714,7 @@ RC do_func_select(SessionEvent *session_event, std::vector<RelAttr> &func_attrs)
         if (func_attr.value.type != FLOATS) {
           return RC::INVALID_ARGUMENT;
         }
-        int acc = 2;
+        int acc = 0;
         if (func_attr.is_has_second_value) {
           acc = *(int *)func_attr.second_value.data;
         }

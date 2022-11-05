@@ -27,11 +27,11 @@ RC TupleCell::to_string_with_func(std::ostream &os, RelAttr func_attr) const {
     if (attr_type_ != FLOATS) {
       return RC::INVALID_ARGUMENT;
     }
-    int acc = 2;
+    int acc = 0;
     if (func_attr.is_has_second_value) {
       acc = *(int *)func_attr.second_value.data;
     }
-    os << round_(*(float *)data_, acc);
+    os << double2string(round_(*(float *)data_, acc));
   } else if (func_attr.func == DATE_FORMAT) {
     if (attr_type_ != DATES || func_attr.is_has_second_value == 0) {
       return RC::INVALID_ARGUMENT;

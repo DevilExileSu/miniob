@@ -168,7 +168,7 @@ private:
   float sum_ = .0;
 };
 
-float round_(float v, int accuracy);
+double round_(double v, int accuracy);
 std::string func_to_string(Func func);
 void value_to_string(std::ostream &os, Value *value);
 void date_format(std::ostream &os, int date, const char *format);
