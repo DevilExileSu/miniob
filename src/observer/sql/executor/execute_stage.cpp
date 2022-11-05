@@ -720,6 +720,16 @@ RC do_func_select(SessionEvent *session_event, std::vector<RelAttr> &func_attrs)
         }
         ss << round_( *(float *)func_attr.value.data, acc);
       } break;
+      case DATE_FORMAT: {
+        if (func_attr.value.type != DATES) {
+          return RC::INVALID_ARGUMENT;
+        }
+        if (func_attr.is_has_second_value == 1) {
+          date_format(ss, *(int *)func_attr.value.data, (char *)func_attr.second_value.data);
+        } else {
+          date_format(ss, *(int *)func_attr.value.data, "%y-%d-%m");
+        }
+      } break;
       default:
         return RC::INVALID_ARGUMENT;
     }

@@ -88,12 +88,16 @@ public:
   void set_func(Func func) {
     func_ = func;
   }
-
+  void set_acc(int acc) {
+    acc_ = acc;
+  }
+  
   RC get_value(const Tuple &tuple, TupleCell &cell) const override;
 private:
   Field field_;
   AggFunc agg_func_ = AggFunc::NONE;
   Func func_ = Func::NONE_;
+  int acc_ = 0;
 };
 
 class ValueExpr : public Expression

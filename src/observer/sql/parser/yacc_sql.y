@@ -684,7 +684,7 @@ select_clause:
 									  CONTEXT->expr_num - CONTEXT->cursor_exp[CONTEXT->depth - 1]);
 
 		CONTEXT->selections[CONTEXT->select_num].is_func = 1;
-		
+
 		// 状态复原
 		--CONTEXT->depth;
 		CONTEXT->attr_num = CONTEXT->cursor_attr[CONTEXT->depth];
@@ -840,23 +840,23 @@ func_with_param:
 		relation_attr_init_with_func(&attr, $3, $5, $1, $7);
 		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
 	}
-	| func LBRACE value RBRACE alias_ID {
+	| func LBRACE value_with_neg RBRACE alias_ID {
 		RelAttr attr;
 		relation_attr_init_with_func_value(&attr, $1, &CONTEXT->values[CONTEXT->value_length - 1], NULL, $5);
 		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
 	}
-	| func LBRACE value COMMA value RBRACE alias_ID {
+	| func LBRACE value_with_neg COMMA value_with_neg RBRACE alias_ID {
 		RelAttr attr;
 		relation_attr_init_with_func_value(&attr, $1, &CONTEXT->values[CONTEXT->value_length - 2], &CONTEXT->values[CONTEXT->value_length - 1], $7);
 		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
 	}
-	| func LBRACE ID COMMA value RBRACE alias_ID {
+	| func LBRACE ID COMMA value_with_neg RBRACE alias_ID {
 		RelAttr attr;
 		relation_attr_init_with_func(&attr, NULL, $3, $1, $7);
 		relation_attr_init_with_func_append_value(&attr, &CONTEXT->values[CONTEXT->value_length - 1]);
 		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
 	}
-	| func LBRACE ID DOT ID COMMA value RBRACE alias_ID {
+	| func LBRACE ID DOT ID COMMA value_with_neg RBRACE alias_ID {
 		RelAttr attr;
 		relation_attr_init_with_func(&attr, $3, $5, $1, $9);
 		relation_attr_init_with_func_append_value(&attr, &CONTEXT->values[CONTEXT->value_length - 1]);
@@ -971,7 +971,7 @@ condition:
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		CONTEXT->value_length = CONTEXT->cursor_value[CONTEXT->depth - 1];
 	}
-	| exp comOp LBRACE value COMMA value value_list RBRACE {
+	| exp comOp LBRACE value_with_neg COMMA value_with_neg value_list RBRACE {
 		// comOp只能是in/not in, exists/not exists
 		// 同除了包含LBRACE value value_list RBRACE的条件语句，comOp都只能是非in/not in, exists/not exists
 		// RelAttr left_attr;
