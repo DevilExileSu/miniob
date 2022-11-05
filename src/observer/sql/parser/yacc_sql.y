@@ -862,6 +862,21 @@ func_with_param:
 		relation_attr_init_with_func_append_value(&attr, &CONTEXT->values[CONTEXT->value_length - 1]);
 		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
 	}
+	| func LBRACE ID COMMA value_with_neg COMMA value_with_neg RBRACE alias_ID {
+		CONTEXT->ssql->flag = SCF_INVALID_DATE;
+		yyresult = 2;
+		goto yyreturnlab;
+	} 
+	| func LBRACE ID DOT ID COMMA value_with_neg COMMA value_with_neg RBRACE alias_ID {
+		CONTEXT->ssql->flag = SCF_INVALID_DATE;
+		yyresult = 2;
+		goto yyreturnlab;
+	}
+	| func func LBRACE value_with_neg COMMA value_with_neg COMMA value_with_neg RBRACE alias_ID {
+		CONTEXT->ssql->flag = SCF_INVALID_DATE;
+		yyresult = 2;
+		goto yyreturnlab;
+	}
 	;
 
 
