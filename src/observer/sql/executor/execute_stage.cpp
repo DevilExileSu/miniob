@@ -666,6 +666,107 @@ RC do_sub_select(SubSelectStmt sub_select_stmt, FilterUnit *filter_unit,
 }
 
 
+RC do_func_select(SessionEvent *session_event, std::vector<RelAttr> &func_attrs) {
+  RC rc = RC::SUCCESS;
+  std::stringstream ss;
+  bool first = true;
+  for (auto func_attr : func_attrs) {
+    if (func_attr.is_value != 1) {
+      return RC::INVALID_ARGUMENT;
+    }
+    if (!first) {
+      ss << " | ";
+    } else {
+      first = false;
+    }
+    if (func_attr.alias != nullptr) {
+      ss << func_attr.alias;
+    } else {
+      if (func_attr.is_value)
+      ss << func_to_string(func_attr.func) << "(";
+      if (func_attr.value.type == CHARS) {
+        ss << "\'"; 
+        value_to_string(ss, &func_attr.value);
+        ss << "\'";
+      } else {
+        value_to_string(ss, &func_attr.value);
+      }
+      if (func_attr.is_has_second_value) {
+        ss << ",";
+        value_to_string(ss, &func_attr.second_value);
+      }
+      ss << ")";
+    }
+  }
+  ss << std::endl;
+  first = true;
+  for (auto func_attr : func_attrs) {
+    if (!first) {
+      ss << " | ";
+    } else {
+      first = false;
+    }
+    switch (func_attr.func) {
+      case LENGTH: {
+        ss << strlen((char *)func_attr.value.data);
+      } break;
+      case ROUND: {
+        if (func_attr.value.type != FLOATS) {
+          return RC::INVALID_ARGUMENT;
+        }
+        int acc = 2;
+        if (func_attr.is_has_second_value) {
+          acc = *(int *)func_attr.second_value.data;
+        }
+        ss << round_( *(float *)func_attr.value.data, acc);
+      } break;
+      default:
+        return RC::INVALID_ARGUMENT;
+    }
+  }
+  ss << std::endl;
+  session_event->set_response(ss.str());
+  return rc;
+}
+
+RC print_query_head_with_func(std::ostream &os, std::vector<std::pair<int, int>> &fields_or_expr, 
+                    const ProjectOperator &oper,  std::vector<RelAttr> func_attrs, 
+                    bool is_multi_table) {
+
+  const TupleCellSpec *cell_spec = nullptr;
+  for (size_t i=0; i < fields_or_expr.size(); i++) {
+    if (i != 0) {
+      os << " | ";
+    }
+    if (fields_or_expr[i].first == 0) {
+      oper.tuple_cell_spec_at(fields_or_expr[i].second, cell_spec);
+      if (is_multi_table && cell_spec->table_name()) {
+        os << cell_spec->table_name() << ".";
+      }
+      if (cell_spec->alias()) {
+        os << cell_spec->alias();
+      } 
+    } else if (fields_or_expr[i].first == 2) {
+      if (func_attrs[fields_or_expr[i].second].alias == nullptr) {
+        os << func_to_string(func_attrs[fields_or_expr[i].second].func) << "(";
+        if (is_multi_table) {
+          os << func_attrs[fields_or_expr[i].second].relation_name << "."; 
+        } else {
+          os << func_attrs[fields_or_expr[i].second].attribute_name;
+        } 
+        if (func_attrs[fields_or_expr[i].second].is_has_second_value) {
+          os << ",";
+          value_to_string(os, &func_attrs[fields_or_expr[i].second].second_value);
+        } 
+        os << ")";
+      } else {
+        os << func_attrs[fields_or_expr[i].second].alias; 
+      }
+    }                   
+  }
+  return RC::SUCCESS;
+}
+
 RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 {
   SelectStmt *select_stmt = (SelectStmt *)(sql_event->stmt());
@@ -681,6 +782,15 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   std::vector<SubSelectStmt> sub_query_select;
   
   std::unordered_map<size_t, std::vector<FilterUnit *>> sub_query_filter;
+  if (select_stmt->is_func()) {
+    rc = do_func_select(session_event, select_stmt->func_attrs());
+    if (rc != RC::SUCCESS) {
+      session_event->set_response("FAILURE\n");
+      return rc;
+    } 
+    return rc;
+  }
+
 
   for (size_t i=0; i < select_stmt->sub_select_stmts().size(); i++) {
     SubSelectStmt sub_select_stmt = select_stmt->sub_select_stmts()[i];
@@ -780,6 +890,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     project_oper.add_projection(field.table(), &field);
   }
   
+  // 含有groupby的select输出
   if (!select_stmt->group_fields().empty()) {
     rc = project_oper.open();
     if (rc != RC::SUCCESS) {
@@ -845,7 +956,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     return rc;
   }
 
-
+  // 含有聚合函数的select输出
   if (select_stmt->is_agg()) {
     AggregateOperator agg_oper(select_stmt->rel_attrs(), select_stmt->query_fields());
     agg_oper.add_child(&project_oper);
@@ -908,7 +1019,52 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   }
 
   std::stringstream ss;
+  // 含有函数的select输出
+  if (!select_stmt->func_attrs().empty()) {
+    auto query_fields = select_stmt->query_fields();
+    auto func_fields = select_stmt->query_func_fields();
+    auto fields_or_expr = select_stmt->fields_or_expr();
+    auto func_attrs = select_stmt->func_attrs();
+    print_query_head_with_func(ss, select_stmt->fields_or_expr(), project_oper, select_stmt->func_attrs(), !cross_oper_list.empty());
+    ss << std::endl;
+    while ((rc = project_oper.next()) == RC::SUCCESS) {
+      // get current record
+      // write to response
+      Tuple *tuple = project_oper.current_tuple();
+      for (size_t i=0; i < fields_or_expr.size(); i++) {
+        if (i != 0) {
+          ss << " | ";
+        }
+        TupleCell cell;
+        if (fields_or_expr[i].first == 0) {
+          rc = tuple->find_cell(query_fields[fields_or_expr[i].second], cell);
+          if (rc != RC::SUCCESS) {
+            session_event->set_response("FAILURE\n");
+            return rc;
+          }
+          cell.to_string(ss);
+        } else if (fields_or_expr[i].first == 2) {
+          rc = tuple->find_cell(func_fields[fields_or_expr[i].second], cell);
+          if (rc != RC::SUCCESS) {
+            session_event->set_response("FAILURE\n");
+            return rc;
+          }
+          rc = cell.to_string_with_func(ss, func_attrs[fields_or_expr[i].second]);
+          if (rc != RC::SUCCESS) {
+            session_event->set_response("FAILURE\n");
+            return rc;
+          }
+        }
+      }
+      ss << std::endl;
+    }
+    session_event->set_response(ss.str());
+    return rc;
+  }
+
+  // 含有orderby和普通的select的输出
   print_tuple_header(ss, project_oper, select_stmt->tables().size() > 1, select_stmt->query_expr(), select_stmt->fields_or_expr());
+  
   if (select_stmt->has_order()) {
     while ((rc = project_oper.next()) == RC::SUCCESS) {
 
@@ -964,28 +1120,32 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
         ss << std::endl;
       }
     }
-  } else {
-    while ((rc = project_oper.next()) == RC::SUCCESS) {
-      // get current record
-      // write to response
-      Tuple *tuple = project_oper.current_tuple();
-      if (nullptr == tuple) {
-        rc = RC::INTERNAL;
-        LOG_WARN("failed to get current record. rc=%s", strrc(rc));
-        break;
-      }
+    session_event->set_response(ss.str());
+    return rc;
+  } 
 
-      tuple_to_string(ss, *tuple, select_stmt->query_expr(), select_stmt->fields_or_expr());
-      ss << std::endl;
+
+  while ((rc = project_oper.next()) == RC::SUCCESS) {
+    // get current record
+    // write to response
+    Tuple *tuple = project_oper.current_tuple();
+    if (nullptr == tuple) {
+      rc = RC::INTERNAL;
+      LOG_WARN("failed to get current record. rc=%s", strrc(rc));
+      break;
     }
-    if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
-      LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
-      session_event->set_response("FAILURE\n");
-      return rc;
-    } else {
-      rc = project_oper.close();
-    }
+    tuple_to_string(ss, *tuple, select_stmt->query_expr(), select_stmt->fields_or_expr());
+    ss << std::endl;
   }
+  
+  if (rc != RC::RECORD_EOF && rc != RC::SUCCESS) {
+    LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
+    session_event->set_response("FAILURE\n");
+    return rc;
+  } else {
+    rc = project_oper.close();
+  }
+
   session_event->set_response(ss.str());
   return rc;
 }

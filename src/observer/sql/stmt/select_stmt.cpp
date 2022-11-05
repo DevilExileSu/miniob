@@ -322,6 +322,9 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   // collect query fields in `select` statement
   std::vector<Field> query_fields;
   std::vector<RelAttr> rel_attrs;
+  std::vector<Field> query_func_fields;
+  std::vector<RelAttr> func_attrs;
+
   bool is_field = false;
   bool is_agg = false;
   
@@ -352,8 +355,16 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     group_fields.emplace_back(field);
   }
 
+  if (select_sql.is_func) {
+    for (int i = select_sql.expr_num - 1; i>=0; i--) {
+      if (select_sql.exp[i]->expr_type == NodeType::ATTR) {
+        RelAttr &relation_attr = *select_sql.exp[i]->attr;
+        func_attrs.emplace_back(relation_attr); 
+      }
+    }
+  }
 
-  for (int i = select_sql.expr_num - 1; i >= 0 ; i--) {
+  for (int i = select_sql.expr_num - 1; i >= 0 && select_sql.is_func != 1; i--) {
     // 如果当前的表达式类型为Attr
     if (select_sql.exp[i]->expr_type == NodeType::ATTR) {
       // RelAttr包含聚合函数的处理
@@ -399,6 +410,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
               query_fields_with_agg.emplace_back(query_fields.back());
               query_fields.pop_back();
               break;
+            } else if (relation_attr.func != NONE_) {
+              return RC::INVALID_ARGUMENT;
             }
             fields_or_expr.emplace_back(std::make_pair(0, i));
           }
@@ -421,6 +434,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
               query_fields_with_agg.emplace_back(query_fields.back());
               query_fields.pop_back();
               break;
+            } else if (relation_attr.func != NONE_) {
+              return RC::INVALID_ARGUMENT;
             }
             fields_or_expr.emplace_back(std::make_pair(0, i));
           }
@@ -440,6 +455,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
                 query_fields_with_agg.emplace_back(query_fields.back());
                 query_fields.pop_back();
                 break;
+              } else if (relation_attr.func != NONE_) {
+                return RC::INVALID_ARGUMENT;
               }
               fields_or_expr.emplace_back(std::make_pair(0, i));
             }
@@ -464,6 +481,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
                 query_fields_with_agg.emplace_back(query_fields.back());
                 query_fields.pop_back();
                 break;
+              } else if (relation_attr.func != NONE_) {
+                return RC::INVALID_ARGUMENT;
               }
               fields_or_expr.emplace_back(std::make_pair(0, i));
             }
@@ -479,9 +498,13 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
             if (cur_is_agg) {
               fields_or_expr.emplace_back(std::make_pair(-1, query_fields_with_agg.size()));
               query_fields_with_agg.emplace_back(field);
-            } else {
+            } else if (relation_attr.func == NONE_) {
               fields_or_expr.emplace_back(std::make_pair(0, query_fields.size()));
               query_fields.push_back(field);
+            } else {
+              fields_or_expr.emplace_back(std::make_pair(2, query_func_fields.size()));
+              func_attrs.emplace_back(relation_attr); 
+              query_func_fields.emplace_back(field);
             }
           }
         }
@@ -503,9 +526,13 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
         if (cur_is_agg) {
           fields_or_expr.emplace_back(std::make_pair(-1, query_fields_with_agg.size()));
           query_fields_with_agg.emplace_back(field);
-        } else {
+        } else if (relation_attr.func == NONE_) {
           fields_or_expr.emplace_back(std::make_pair(0, query_fields.size()));
           query_fields.push_back(field);
+        } else {
+          fields_or_expr.emplace_back(std::make_pair(2, query_func_fields.size()));
+          func_attrs.emplace_back(relation_attr); 
+          query_func_fields.emplace_back(field);
         }
       }
       // 2. 对聚合函数的处理
@@ -646,6 +673,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->group_fields_.swap(group_fields);
   select_stmt->query_fields_with_agg_.swap(query_fields_with_agg);
+
   select_stmt->rel_attrs_.swap(rel_attrs);
   select_stmt->sub_select_stmts_.swap(sub_select_stmt);
   select_stmt->query_expr_.swap(query_expr);
@@ -654,6 +682,9 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->is_and_ = select_sql.is_and;
   select_stmt->tuple_comparetor_.fields_ = select_stmt->query_fields_;
   select_stmt->tuple_comparetor_.fields_order_.swap(fields_order);
+  select_stmt->is_func_ = select_sql.is_func;
+  select_stmt->func_attrs_.swap(func_attrs);
+  select_stmt->query_func_fields_.swap(query_func_fields);
   stmt = select_stmt;
   return RC::SUCCESS;
 }

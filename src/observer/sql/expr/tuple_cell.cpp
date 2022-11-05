@@ -11,12 +11,38 @@ See the Mulan PSL v2 for more details. */
 //
 // Created by WangYunlai on 2022/07/05.
 //
-
 #include "sql/expr/tuple_cell.h"
 #include "storage/common/field.h"
 #include "common/log/log.h"
 #include "util/comparator.h"
 #include "util/util.h"
+
+RC TupleCell::to_string_with_func(std::ostream &os, RelAttr func_attr) const {
+  if (func_attr.func == LENGTH) {
+    if (attr_type_ != CHARS) {
+      return RC::INVALID_ARGUMENT;
+    }
+    os << strlen(data_);
+  } else if(func_attr.func == ROUND) {
+    if (attr_type_ != FLOATS) {
+      return RC::INVALID_ARGUMENT;
+    }
+    int acc = 2;
+    if (func_attr.is_has_second_value) {
+      acc = *(int *)func_attr.second_value.data;
+    }
+    os << round_(*(float *)data_, acc);
+  } else if (func_attr.func == DATE_FORMAT) {
+    if (attr_type_ != DATES || func_attr.is_has_second_value == 0) {
+      return RC::INVALID_ARGUMENT;
+    }
+    date_format(os, *(int *)data_, (char *)func_attr.second_value.data);
+  } else {
+    return RC::INVALID_ARGUMENT;
+  }
+  return RC::SUCCESS;
+}
+
 
 void TupleCell::to_string(std::ostream &os) const
 {

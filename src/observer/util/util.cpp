@@ -249,3 +249,134 @@ int check_prefix(std::string v) {
         } break;
     }
  }
+
+ std::string func_to_string(Func func)
+{
+  switch (func) {
+    case Func::LENGTH:
+      return "LENGTH";
+    case Func::ROUND:
+      return "ROUND";
+    case Func::DATE_FORMAT:
+      return "DATE_FORMAT";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+void value_to_string(std::ostream &os, Value *value)
+{
+  switch (value->type) {
+  case INTS: {
+    os << *(int *)value->data;
+  } break;
+  case FLOATS: {
+    float v = *(float *)value->data;
+    os << v;
+  } break;
+  case CHARS: {
+    os << (char *)value->data;
+  } break;
+  case NULL_: {
+    os << "NULL";
+  } break;
+  default: {
+  } break;
+  }
+}
+
+float round_(float v, int accuracy)
+{
+  double p = pow(10, accuracy);
+  return round(v * p) / p;
+}
+
+
+char *M(int month)
+{
+  char *result = (char *)malloc(10);
+  switch (month) {
+    case 1:
+      strcpy(result, "January");
+      break;
+    case 2:
+      strcpy(result, "February");
+      break;
+    case 3:
+      strcpy(result, "March");
+      break;
+    case 4:
+      strcpy(result, "April");
+      break;
+    case 5:
+      strcpy(result, "May");
+      break;
+    case 6:
+      strcpy(result, "June");
+      break;
+    case 7:
+      strcpy(result, "July");
+      break;
+    case 8:
+      strcpy(result, "August");
+      break;
+    case 9:
+      strcpy(result, "September");
+      break;
+    case 10:
+      strcpy(result, "October");
+      break;
+    case 11:
+      strcpy(result, "November");
+      break;
+    case 12:
+      strcpy(result, "December");
+      break;
+  }
+  return result;
+}
+
+char *D(int day)
+{
+  char *result = (char *)malloc(10);
+  sprintf(result, "%02d", day);
+  if (day % 10 == 1 && day != 11) {
+    strcat(result, "st");
+  } else if (day % 10 == 2 && day != 12) {
+    strcat(result, "nd");
+  } else if (day % 10 == 3 && day != 13) {
+    strcat(result, "rd");
+  } else {
+    strcat(result, "th");
+  }
+
+  return result;
+}
+
+
+void date_format(std::ostream &os, int date, const char *format) {
+  int y = date/10000, m = (date%10000)/100, d = date%100;
+  for(size_t i=0; i<strlen(format); i++) {
+    if (format[i] == 'Y') {
+      os << y;
+    } else if (format[i] == 'y') {
+      os << y % 100;
+    } else if (format[i] == 'M') {
+      os << M(m);
+    } else if (format[i] == 'm') {
+      char mon[8];
+      sprintf(mon, "%02d", m);
+      os << mon;
+    } else if (format[i] == 'D') {
+      os << D(d);
+    } else if (format[i] == 'd') {
+      char day[8];
+      sprintf(day, "%02d", d);
+      os << day; 
+    } else if (format[i] == '%'){
+      continue;
+    } else {
+      os << format[i];
+    }
+  }
+}

@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include <string>
+#include <ctime>
 
 #include "rc.h"
 #include "sql/expr/tuple_cell.h"
@@ -166,3 +167,8 @@ private:
   int not_null_count_ = 0;
   float sum_ = .0;
 };
+
+float round_(float v, int accuracy);
+std::string func_to_string(Func func);
+void value_to_string(std::ostream &os, Value *value);
+void date_format(std::ostream &os, int date, const char *format);

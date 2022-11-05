@@ -21,6 +21,23 @@ RC FieldExpr::get_value(const Tuple &tuple, TupleCell &cell) const
     CustomizeTuple *c_tuple = (CustomizeTuple *)(&tuple); 
     return c_tuple->find_cell(field_, cell, agg_func_);
   }
+  if (func_ != NONE_ && func_ == LENGTH) {
+    TupleCell tmp_cell;
+    RC rc = tuple.find_cell(field_, tmp_cell);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    if (tmp_cell.attr_type() != CHARS) {
+      return RC::INVALID_ARGUMENT;
+    }
+    cell.set_type(CHARS);
+    const char *len = int2string(strlen(tmp_cell.data())).c_str();
+    cell.set_data(len);
+    return RC::SUCCESS;
+    // cell.set_length(strlen(len));
+  } else if (func_ != NONE_ && func_ != LENGTH) {
+    return RC::INVALID_ARGUMENT;
+  }
   return tuple.find_cell(field_, cell);
 }
 

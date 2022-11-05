@@ -155,6 +155,9 @@ ParserContext *get_context(yyscan_t scanner)
 		GROUP
 		BY
 		HAVING
+		LENGTH_T
+		ROUND_T
+		DATE_FORMAT_T
 		LIKE
         EQ
         LT
@@ -190,6 +193,8 @@ ParserContext *get_context(yyscan_t scanner)
 %token <string> STRING_V
 //非终结符
 
+%type <number> func;
+%type <attr1> func_with_param;
 %type <number> agg_func;
 %type <number> type;
 %type <condition1> condition;
@@ -580,6 +585,9 @@ exp:
 	| agg {
 		$$ = create_expression(NULL, NULL, NULL, &CONTEXT->attrs[CONTEXT->expression_attr_num - 1], ATTR);
 	}
+	| func_with_param {
+		$$ = create_expression(NULL, NULL, NULL, &CONTEXT->attrs[CONTEXT->expression_attr_num - 1], ATTR);
+	}
 	;
 
 
@@ -652,6 +660,31 @@ select_clause:
 									  CONTEXT->expr_num - CONTEXT->cursor_exp[CONTEXT->depth - 1]);
 
 		CONTEXT->selections[CONTEXT->select_num].is_and = 1;
+		// 状态复原
+		--CONTEXT->depth;
+		CONTEXT->attr_num = CONTEXT->cursor_attr[CONTEXT->depth];
+		CONTEXT->condition_length = CONTEXT->cursor_cond[CONTEXT->depth];
+		CONTEXT->value_length = CONTEXT->cursor_value[CONTEXT->depth];
+		CONTEXT->expr_num = CONTEXT->cursor_exp[CONTEXT->depth];
+		CONTEXT->expression_attr_num = CONTEXT->attr_num;
+		// 临时变量清零
+		CONTEXT->from_length=0;
+		CONTEXT->select_length=0;
+		++CONTEXT->select_num;
+	}
+	| select_begin select_attr {
+		selects_append_attribute_list(&CONTEXT->selections[CONTEXT->select_num], 
+									  CONTEXT->attrs,
+									  CONTEXT->cursor_attr[CONTEXT->depth - 1],
+									  CONTEXT->attr_num - CONTEXT->cursor_attr[CONTEXT->depth - 1]);
+
+		selects_append_expressions(&CONTEXT->selections[CONTEXT->select_num], 
+									  CONTEXT->expressions,
+									  CONTEXT->cursor_exp[CONTEXT->depth - 1],
+									  CONTEXT->expr_num - CONTEXT->cursor_exp[CONTEXT->depth - 1]);
+
+		CONTEXT->selections[CONTEXT->select_num].is_func = 1;
+		
 		// 状态复原
 		--CONTEXT->depth;
 		CONTEXT->attr_num = CONTEXT->cursor_attr[CONTEXT->depth];
@@ -788,6 +821,47 @@ agg_func:
 	| COUNT_T { $$=COUNT; }
 	| AVG_T { $$=AVG; }
 	| SUM_T { $$=SUM; }
+	;
+
+func:
+	LENGTH_T { $$=LENGTH; }
+	| ROUND_T { $$=ROUND; }
+	| DATE_FORMAT_T { $$=DATE_FORMAT; }
+	;
+
+func_with_param:
+	func LBRACE ID RBRACE alias_ID {
+		RelAttr attr;
+		relation_attr_init_with_func(&attr, NULL, $3, $1, $5);
+		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
+	  }
+	| func LBRACE ID DOT ID RBRACE alias_ID {
+		RelAttr attr;
+		relation_attr_init_with_func(&attr, $3, $5, $1, $7);
+		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
+	}
+	| func LBRACE value RBRACE alias_ID {
+		RelAttr attr;
+		relation_attr_init_with_func_value(&attr, $1, &CONTEXT->values[CONTEXT->value_length - 1], NULL, $5);
+		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
+	}
+	| func LBRACE value COMMA value RBRACE alias_ID {
+		RelAttr attr;
+		relation_attr_init_with_func_value(&attr, $1, &CONTEXT->values[CONTEXT->value_length - 2], &CONTEXT->values[CONTEXT->value_length - 1], $7);
+		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
+	}
+	| func LBRACE ID COMMA value RBRACE alias_ID {
+		RelAttr attr;
+		relation_attr_init_with_func(&attr, NULL, $3, $1, $7);
+		relation_attr_init_with_func_append_value(&attr, &CONTEXT->values[CONTEXT->value_length - 1]);
+		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
+	}
+	| func LBRACE ID DOT ID COMMA value RBRACE alias_ID {
+		RelAttr attr;
+		relation_attr_init_with_func(&attr, $3, $5, $1, $9);
+		relation_attr_init_with_func_append_value(&attr, &CONTEXT->values[CONTEXT->value_length - 1]);
+		CONTEXT->attrs[CONTEXT->expression_attr_num++] = attr;
+	}
 	;
 
 

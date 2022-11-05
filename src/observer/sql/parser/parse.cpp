@@ -54,6 +54,50 @@ void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_
 }
 
 
+void relation_attr_init_with_func(
+    RelAttr *relation_attr, const char *relation_name, const char *attribute_name, Func func, const char *alias)
+{
+  if (relation_name != nullptr) {
+    relation_attr->relation_name = strdup(relation_name);
+  } else {
+    relation_attr->relation_name = nullptr;
+  }
+  relation_attr->attribute_name = strdup(attribute_name);
+  relation_attr->func = func;
+  relation_attr->is_num = 0;
+  relation_attr->is_value = 0;
+  if (alias != nullptr) {
+    relation_attr->alias = strdup(alias);
+  } else {
+    relation_attr->alias = nullptr;
+  }
+}
+
+void relation_attr_init_with_func_value(RelAttr *relation_attr, Func func, Value *value, Value *second_value, const char *alias) {
+  relation_attr->relation_name = nullptr;
+  relation_attr->attribute_name = nullptr;
+  relation_attr->func = func;
+  relation_attr->is_num = 0;
+  relation_attr->is_value = 1;
+  relation_attr->value = *value;
+  if (second_value != nullptr) {
+    relation_attr->second_value = *second_value;
+    relation_attr->is_has_second_value = 1;
+  } else {
+    relation_attr->is_has_second_value = 0;
+  }
+  if (alias != nullptr) {
+    relation_attr->alias = strdup(alias);
+  } else {
+    relation_attr->alias = nullptr;
+  }
+}
+
+void relation_attr_init_with_func_append_value(RelAttr *relation_attr, Value *value) {
+  relation_attr->is_has_second_value = 1;
+  relation_attr->second_value = *value; 
+}
+
 void relation_attr_destroy(RelAttr *relation_attr)
 {
   if (relation_attr->relation_name != nullptr) {

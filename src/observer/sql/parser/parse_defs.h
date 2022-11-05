@@ -43,16 +43,8 @@ typedef enum {
   SUM,
 } AggFunc;
 
+typedef enum { NONE_, LENGTH, ROUND, DATE_FORMAT } Func;
 
-//属性结构体
-typedef struct _Attr {
-  char *relation_name;   // relation name (may be NULL) 表名
-  char *attribute_name;  // attribute name              属性名
-  char *alias;           // alias name                  别名
-  AggFunc agg_func; 
-  int is_num;
-  int num;
-} RelAttr;
 
 typedef enum {
   EQUAL_TO,     //"="     0
@@ -95,6 +87,21 @@ typedef struct _Value {
   int set_size;
 } Value;
 
+
+//属性结构体
+typedef struct _Attr {
+  char *relation_name;   // relation name (may be NULL) 表名
+  char *attribute_name;  // attribute name              属性名
+  char *alias;           // alias name                  别名
+  AggFunc agg_func; 
+  Func func;
+  int is_num;
+  int num;
+  int is_value;
+  Value value;
+  Value second_value;
+  int is_has_second_value;
+} RelAttr;
 
 typedef struct _Exp{
   NodeType expr_type;
@@ -154,6 +161,7 @@ typedef struct {
   Having having;
   int has_having;
   int is_and;                     // 条件语句是and还是or
+  int is_func;
 } Selects;
 
 
@@ -296,6 +304,11 @@ void relation_attr_init_with_alias(RelAttr *relation_attr, const char *relation_
 void relation_attr_destroy(RelAttr *relation_attr);
 void relation_attr_init_with_agg(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, AggFunc agg, const char *alias_name);
 void relation_attr_init_with_agg_num(RelAttr *relation_attr, AggFunc agg, int num, const char *alias_name);
+void relation_attr_init_with_func(
+    RelAttr *relation_attr, const char *relation_name, const char *attribute_name, Func func, const char *alias);
+void relation_attr_init_with_func_value(
+    RelAttr *relation_attr, Func func, Value *value, Value *second_value, const char *alias);
+void relaiton_attr_with_func_append_value(RelAttr *relation_attr, Value *value);
 
 void value_init_integer(Value *value, int v);
 void value_init_float(Value *value, float v);
@@ -315,7 +328,7 @@ void having_init(Having *having, RelAttr *attr, Value *value, CompOp comp, int s
 // +、-、*、\、创建(left_expr, right_expr, NULL, NULL, ('+', '-', '*', '\'))
 // 叶子节点只能是Value或者RelAttr，Value创建(NULL, NULL, Value, NULL, VAL)，RelAttr创建(NULL, NULL, RelAttr, NULl, RelAttr)
 Exp *create_expression(Exp *left_expr, Exp *right_expr, Value *value, RelAttr *relation_attr, NodeType node_type);
-// TODO: 释放Exp *
+// 释放Exp *
 void expression_destroy(Exp *exp);
 
 void value_destroy(Value *value);
